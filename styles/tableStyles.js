@@ -3,6 +3,11 @@
 // Webflow provides ALL visual styling (headers, rows, cells, alternating, hover).
 // We only add technical fixes (visibility, ellipsis, dropdowns, min-max, frozen, grey bg, mobile).
 // The ONLY color difference from NBA is in tabManager.js (tab button gradient).
+//
+// FIXES APPLIED:
+// - Header filter inputs now have font-weight: 600 + color: #333 to match NBA bold/dark text
+// - Frozen column backgrounds use #fafafa/#ffffff/#eff6ff on ALL screen sizes (not just mobile)
+// - Previous frozen colors (#f5f5f5, #fff7ed) corrected to match NBA's Webflow alternating rows
 
 import { isMobile, isTablet, getDeviceScale } from '../shared/config.js';
 
@@ -87,6 +92,11 @@ function injectScrollbarFix() {
  * NO header colors, NO row colors, NO cell padding.
  * Webflow provides all visual styling.
  * We only add technical layout fixes.
+ *
+ * FIXES vs previous version:
+ * 1) Added header filter input bold/dark text rules
+ * 2) Added desktop-level frozen cell background rules (was mobile-only before)
+ * 3) Fixed frozen cell colors: #f5f5f5 -> #fafafa, #fff7ed -> #eff6ff
  */
 function injectMinimalStyles() {
     const style = document.createElement('style');
@@ -125,6 +135,34 @@ function injectMinimalStyles() {
             color: #333 !important;
         }
         
+        /* =====================================================
+           FIX #1: Header filter inputs — bold dark text
+           NBA gets this from Webflow theme; NHL Webflow theme
+           does not provide it, so we add it explicitly.
+           ===================================================== */
+        .tabulator-header-filter input[type="search"],
+        .tabulator-header-filter input[type="text"],
+        .tabulator-header-filter input[type="number"],
+        .tabulator-header-filter input {
+            font-weight: 600 !important;
+            color: #333 !important;
+        }
+        
+        /* Min/Max filter inputs in headers: bold dark text */
+        .min-max-input,
+        .min-max-filter-container input {
+            font-weight: 600 !important;
+            color: #333 !important;
+        }
+        
+        /* Bankroll input in headers: bold dark text */
+        .bankroll-input,
+        .bankroll-input-field,
+        .bankroll-input-container input {
+            font-weight: 600 !important;
+            color: #333 !important;
+        }
+        
         /* Data cells: single-line with ellipsis (no padding/border - Webflow provides those) */
         .tabulator-cell {
             white-space: nowrap !important;
@@ -155,6 +193,7 @@ function injectMinimalStyles() {
             max-width: 45px !important;
             margin: 0 auto !important;
         }
+        
         .min-max-input,
         .min-max-filter-container > input {
             width: 100% !important;
@@ -166,44 +205,15 @@ function injectMinimalStyles() {
             text-align: center !important;
             box-sizing: border-box !important;
             -moz-appearance: textfield !important;
-            -webkit-appearance: none !important;
-            appearance: none !important;
         }
+        
         .min-max-input::-webkit-outer-spin-button,
         .min-max-input::-webkit-inner-spin-button {
             -webkit-appearance: none !important;
             margin: 0 !important;
         }
-        .min-max-input:focus {
-            outline: none !important;
-            border-color: #999 !important;
-            box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1) !important;
-        }
         
-        /* Frozen column: z-index + visible border */
-        .tabulator-frozen {
-            z-index: 11 !important;
-        }
-        .tabulator-frozen.tabulator-frozen-left {
-            border-right: 2px solid #999 !important;
-            box-shadow: 2px 0 4px rgba(0,0,0,0.1) !important;
-        }
-        /* Frozen header: opaque so content doesn't scroll behind */
-        .tabulator-header .tabulator-frozen {
-            z-index: 100 !important;
-        }
-        /* Frozen data cells: explicit colors matching Webflow's alternating pattern */
-        .tabulator-row .tabulator-frozen {
-            background-color: white !important;
-        }
-        .tabulator-row:nth-child(even) .tabulator-frozen {
-            background-color: #f5f5f5 !important;
-        }
-        .tabulator-row:hover .tabulator-frozen {
-            background-color: #fff7ed !important;
-        }
-        
-        /* Standalone header alignment (mobile/tablet) */
+        /* Mobile header alignment */
         @media screen and (max-width: 1024px) {
             .tabulator-header {
                 display: flex !important;
@@ -228,20 +238,10 @@ function injectMinimalStyles() {
                 height: 100% !important;
                 padding-top: 6px !important;
             }
-            .tabulator-col.standalone-header .tabulator-col-title-holder {
-                display: flex !important;
-                flex-direction: column !important;
-                justify-content: flex-start !important;
-                flex-grow: 0 !important;
-            }
-            .tabulator-col.standalone-header .tabulator-header-filter {
-                margin-top: auto !important;
-            }
             .tabulator-col:not(.tabulator-col-group) .tabulator-col-title {
                 text-align: center !important;
                 padding-top: 4px !important;
             }
-            /* Frozen header on mobile needs opaque bg */
             .tabulator-header .tabulator-col.tabulator-frozen {
                 z-index: 100 !important;
             }
@@ -251,6 +251,25 @@ function injectMinimalStyles() {
         .tabulator .tabulator-tableholder {
             overflow-y: auto !important;
             overflow-x: auto !important;
+        }
+        
+        /* =====================================================
+           FIX #2: Frozen cell backgrounds — ALL screen sizes
+           Previously these were ONLY inside the mobile media query,
+           so desktop frozen Name column had mismatched colors.
+           Colors fixed: #f5f5f5 -> #fafafa, #fff7ed -> #eff6ff
+           ===================================================== */
+        .tabulator-row .tabulator-cell.tabulator-frozen {
+            background: inherit !important;
+        }
+        .tabulator-row.tabulator-row-even .tabulator-cell.tabulator-frozen {
+            background-color: #fafafa !important;
+        }
+        .tabulator-row.tabulator-row-odd .tabulator-cell.tabulator-frozen {
+            background-color: #ffffff !important;
+        }
+        .tabulator-row:hover .tabulator-cell.tabulator-frozen {
+            background-color: #eff6ff !important;
         }
         
         /* Desktop: grey background fills empty space */
@@ -288,19 +307,18 @@ function injectMinimalStyles() {
                 -webkit-overflow-scrolling: touch !important;
             }
             .tabulator-row .tabulator-cell.tabulator-frozen {
-                background-color: white !important;
                 position: sticky !important;
                 left: 0 !important;
                 z-index: 10 !important;
             }
             .tabulator-row.tabulator-row-even .tabulator-cell.tabulator-frozen {
-                background-color: #f5f5f5 !important;
+                background-color: #fafafa !important;
             }
             .tabulator-row.tabulator-row-odd .tabulator-cell.tabulator-frozen {
-                background-color: white !important;
+                background-color: #ffffff !important;
             }
             .tabulator-row:hover .tabulator-cell.tabulator-frozen {
-                background-color: #fff7ed !important;
+                background-color: #eff6ff !important;
             }
             .tabulator-header .tabulator-col.tabulator-frozen {
                 position: sticky !important;
@@ -310,7 +328,7 @@ function injectMinimalStyles() {
         }
     `;
     document.head.appendChild(style);
-    console.log('NHL minimal styles injected (pure NBA copy, no color overrides)');
+    console.log('NHL minimal styles injected (with header filter bold text, fixed frozen colors, desktop frozen rules)');
 }
 
 /**
@@ -357,44 +375,46 @@ function injectFullStyles() {
             justify-content: center !important; padding: 4px 2px !important;
         }
         .tabulator-col .tabulator-col-sorter .tabulator-arrow {
-            border-bottom-color: rgba(255,255,255,0.6) !important;
+            border-bottom-color: rgba(255,255,255,0.7) !important;
         }
-        .tabulator-col[aria-sort="ascending"] .tabulator-col-sorter .tabulator-arrow {
-            border-bottom-color: white !important;
-        }
-        .tabulator-col[aria-sort="descending"] .tabulator-col-sorter .tabulator-arrow {
-            border-top-color: white !important;
-        }
-        .tabulator-header-filter { margin-top: 3px; }
-        .tabulator-header-filter input {
-            background: rgba(255,255,255,0.95) !important;
-            border: 1px solid rgba(255,255,255,0.3) !important;
-            border-radius: 3px; padding: 3px 5px !important;
-            font-size: ${Math.max(baseFontSize - 1, 9)}px !important;
-            color: #333 !important;
-        }
-        .tabulator-header-filter input:focus {
-            background: white !important; border-color: #60a5fa !important;
-            box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.3) !important;
+        .tabulator-col-group-cols {
+            border-top: 1px solid rgba(255,255,255,0.3);
         }
         .tabulator-row {
-            background-color: white; border-bottom: 1px solid #f0f0f0; min-height: 32px;
+            border-bottom: 1px solid #e8e8e8;
+            min-height: 32px;
         }
-        .tabulator-row:nth-child(even) { background-color: #fafafa; }
-        .tabulator-row:hover { background-color: #eff6ff !important; }
+        .tabulator-row:nth-child(even) {
+            background-color: #fafafa;
+        }
+        .tabulator-row:hover {
+            background-color: #eff6ff;
+        }
         .tabulator-cell {
-            padding: 4px 8px !important; border-right: 1px solid #f0f0f0;
-            white-space: nowrap !important; overflow: hidden !important;
+            padding: 6px 4px;
+            border-right: 1px solid #f0f0f0;
+            white-space: nowrap !important;
+            overflow: hidden !important;
             text-overflow: ellipsis !important;
         }
-        .custom-multiselect-button {
-            background: white; cursor: pointer; font-size: 11px !important;
-            text-align: center; white-space: nowrap; overflow: hidden;
-            text-overflow: ellipsis; border-radius: 3px;
+        /* Header filter inputs: bold dark text */
+        .tabulator-header-filter input[type="search"],
+        .tabulator-header-filter input[type="text"],
+        .tabulator-header-filter input[type="number"],
+        .tabulator-header-filter input {
+            font-weight: 600 !important;
+            color: #333 !important;
         }
-        .tabulator-frozen {
-            position: sticky !important; left: 0 !important;
-            z-index: 10 !important; background: white !important;
+        .min-max-input,
+        .min-max-filter-container input {
+            font-weight: 600 !important;
+            color: #333 !important;
+        }
+        .bankroll-input,
+        .bankroll-input-field,
+        .bankroll-input-container input {
+            font-weight: 600 !important;
+            color: #333 !important;
         }
         .tabulator-frozen.tabulator-frozen-left {
             border-right: 2px solid rgba(30, 64, 175, 0.4) !important;
@@ -404,8 +424,11 @@ function injectFullStyles() {
             background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
             z-index: 100 !important;
         }
+        /* Frozen cell backgrounds - all screen sizes */
         .tabulator-row .tabulator-frozen { background: inherit !important; }
+        .tabulator-row.tabulator-row-even .tabulator-frozen,
         .tabulator-row:nth-child(even) .tabulator-frozen { background: #fafafa !important; }
+        .tabulator-row.tabulator-row-odd .tabulator-frozen { background: #ffffff !important; }
         .tabulator-row:hover .tabulator-frozen { background: #eff6ff !important; }
         .min-max-filter-container, .tabulator .min-max-filter-container,
         .tabulator-header .min-max-filter-container,
@@ -430,8 +453,10 @@ function injectFullStyles() {
             box-shadow: 0 0 0 1px rgba(30, 64, 175, 0.2) !important;
         }
         .custom-multiselect-dropdown, [id^="dropdown_"] {
-            z-index: 2147483647 !important; position: fixed !important;
-            background: white !important; border: 1px solid #333 !important;
+            z-index: 2147483647 !important;
+            position: fixed !important;
+            background: white !important;
+            border: 1px solid #333 !important;
             border-radius: 4px !important;
             box-shadow: 0 -4px 12px rgba(0,0,0,0.15) !important;
         }
