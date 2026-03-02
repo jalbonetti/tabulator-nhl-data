@@ -2,12 +2,13 @@
 // CRITICAL: renderHorizontal must be "basic" for fitData layout compatibility
 //
 // WIDTH MANAGEMENT:
-// - scanDataForMaxWidths: SKIPS entirely on mobile/tablet. Desktop scans all.
+// - scanDataForMaxWidths: On mobile, measures header widths only (no data scan).
+//   On desktop, full scan of headers + data.
 // - calculateAndApplyWidths: Gates behind _firstCalcDone. Sets explicit pixel widths.
 // - forceRecalculateWidths: Called by TabManager. Also gates behind _firstCalcDone.
 //
 // MOBILE FIX: Container-specific CSS overrides + explicit pixel widths + header nowrap.
-// Odds columns have minWidth:80 to fit "Book Odds"/"Median Odds"/"Best Odds" headers.
+// Odds columns have minWidth:80 and headers are measured to ensure proper fit.
 
 import { BaseTable } from './baseTable.js';
 import { createCustomMultiSelect } from '../components/customMultiSelect.js';
@@ -197,13 +198,11 @@ export class NHLGameOddsTable extends BaseTable {
         if (this._firstCalcDone) this._doCalculateAndApplyWidths();
     }
 
-    // Public entry point — gates behind _firstCalcDone
     calculateAndApplyWidths() {
         if (!this._firstCalcDone) return;
         this._doCalculateAndApplyWidths();
     }
 
-    // Internal — does the actual work, no gating
     _doCalculateAndApplyWidths() {
         if (!this.table) return;
         
@@ -260,19 +259,18 @@ export class NHLGameOddsTable extends BaseTable {
         }
     }
 
+    // FIXED: No longer skips entirely on mobile. Now measures header widths on ALL
+    // devices to ensure columns fit their header text with white-space:nowrap.
+    // Data scanning (row values) is still desktop-only.
     scanDataForMaxWidths(data) {
         if (!data || data.length === 0 || !this.table) return;
         
-        if (isMobile() || isTablet()) {
-            console.log('NHL Game Odds: Skipping scan on mobile/tablet');
-            return;
-        }
+        const isSmallScreen = isMobile() || isTablet();
         
-        console.log(`NHL Game Odds Scanning ${data.length} rows...`);
+        console.log(`NHL Game Odds Scanning ${data.length} rows (mobile: ${isMobile()}, tablet: ${isTablet()})...`);
         
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        ctx.font = '500 12px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
         
         const maxWidths = {
             "Game Matchup": 0, "Game Prop Type": 0, "Game Label": 0, "Game Book": 0,
@@ -280,31 +278,54 @@ export class NHLGameOddsTable extends BaseTable {
             "Game Best Odds Books": 0, "EV %": 0, "Quarter Kelly %": 0, "Link": 0
         };
         
-        data.forEach(row => {
-            Object.keys(maxWidths).forEach(field => {
-                const value = row[field];
-                if (value !== null && value !== undefined && value !== '') {
-                    let displayValue = String(value);
-                    if (field.includes('Odds') && field !== 'Game Best Odds Books') {
-                        const num = parseInt(value, 10);
-                        if (!isNaN(num)) displayValue = num > 0 ? `+${num}` : `${num}`;
-                    }
-                    if (field === 'EV %' || field === 'Quarter Kelly %') {
-                        const num = parseFloat(value);
-                        if (!isNaN(num)) {
-                            const pctDisplay = (num * 100).toFixed(1) + '%';
-                            const moneyDisplay = '$99999.99';
-                            displayValue = pctDisplay.length > moneyDisplay.length ? pctDisplay : moneyDisplay;
-                        }
-                    }
-                    if (field === 'Game Matchup') displayValue = this.abbreviateMatchup(value);
-                    if (field === 'Link') displayValue = 'Bet';
-                    
-                    const textWidth = ctx.measureText(displayValue).width;
-                    if (textWidth > maxWidths[field]) maxWidths[field] = textWidth;
-                }
-            });
+        // ALWAYS measure header widths (critical for nowrap headers on mobile)
+        ctx.font = '600 12px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
+        const HEADER_PADDING = 16;
+        const SORT_ICON_WIDTH = 16;
+        
+        const fieldToTitle = {
+            "Game Matchup": "Matchup", "Game Prop Type": "Prop", "Game Label": "Label",
+            "Game Book": "Book", "Game Odds": "Book Odds", "Game Median Odds": "Median Odds",
+            "Game Best Odds": "Best Odds", "Game Best Odds Books": "Best Books",
+            "EV %": "EV %", "Quarter Kelly %": "Bet Size", "Link": "Link"
+        };
+        
+        Object.keys(maxWidths).forEach(field => {
+            const title = fieldToTitle[field] || field;
+            const headerWidth = ctx.measureText(title).width + HEADER_PADDING + SORT_ICON_WIDTH;
+            maxWidths[field] = headerWidth;
         });
+        
+        // Data scanning: desktop only (mobile uses abbreviated matchups at minWidth)
+        if (!isSmallScreen) {
+            ctx.font = '500 12px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
+            
+            data.forEach(row => {
+                Object.keys(maxWidths).forEach(field => {
+                    const value = row[field];
+                    if (value !== null && value !== undefined && value !== '') {
+                        let displayValue = String(value);
+                        if (field.includes('Odds') && field !== 'Game Best Odds Books') {
+                            const num = parseInt(value, 10);
+                            if (!isNaN(num)) displayValue = num > 0 ? `+${num}` : `${num}`;
+                        }
+                        if (field === 'EV %' || field === 'Quarter Kelly %') {
+                            const num = parseFloat(value);
+                            if (!isNaN(num)) {
+                                const pctDisplay = (num * 100).toFixed(1) + '%';
+                                const moneyDisplay = '$99999.99';
+                                displayValue = pctDisplay.length > moneyDisplay.length ? pctDisplay : moneyDisplay;
+                            }
+                        }
+                        if (field === 'Game Matchup') displayValue = this.abbreviateMatchup(value);
+                        if (field === 'Link') displayValue = 'Bet';
+                        
+                        const textWidth = ctx.measureText(displayValue).width;
+                        if (textWidth > maxWidths[field]) maxWidths[field] = textWidth;
+                    }
+                });
+            });
+        }
         
         const CELL_PADDING = 16;
         const BUFFER = 8;
