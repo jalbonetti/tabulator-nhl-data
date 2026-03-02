@@ -110,6 +110,7 @@ export class NHLGameOddsTable extends BaseTable {
                         this.calculateAndApplyWidths();
                     }
                 }
+                this.ensureHeaderMinWidths();
             }, 200);
             
             window.addEventListener('resize', this.debounce(() => {
@@ -127,6 +128,7 @@ export class NHLGameOddsTable extends BaseTable {
                     this.calculateAndApplyWidths();
                 }, 100);
             }
+            setTimeout(() => this.ensureHeaderMinWidths(), 50);
         });
         
         this.table.on("dataLoaded", () => {
@@ -139,6 +141,7 @@ export class NHLGameOddsTable extends BaseTable {
                         this.calculateAndApplyWidths();
                     }
                 }
+                this.ensureHeaderMinWidths();
             }, 200);
         });
     }
@@ -150,6 +153,35 @@ export class NHLGameOddsTable extends BaseTable {
             clearTimeout(timeout);
             timeout = setTimeout(() => func.apply(this, args), wait);
         };
+    }
+
+    // Ensure ALL column headers fit on one line without wrapping on any device
+    ensureHeaderMinWidths() {
+        if (!this.table) return;
+        
+        const mobile = isMobile();
+        const tablet = isTablet();
+        const baseFontSize = mobile ? 10 : tablet ? 11 : 12;
+        
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.font = `600 ${baseFontSize}px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif`;
+        
+        // Padding inside header cell + sort arrow icon
+        const HEADER_PADDING = 16;
+        const SORT_ICON_WIDTH = 16;
+        
+        this.table.getColumns().forEach(col => {
+            const def = col.getDefinition();
+            if (!def.title || def.headerSort === false) return;
+            
+            const headerTextWidth = ctx.measureText(def.title).width;
+            const requiredWidth = Math.ceil(headerTextWidth + HEADER_PADDING + SORT_ICON_WIDTH);
+            
+            if (col.getWidth() < requiredWidth) {
+                col.setWidth(requiredWidth);
+            }
+        });
     }
 
     // FIX: Added forceRecalculateWidths - called by TabManager on tab switch
@@ -165,6 +197,7 @@ export class NHLGameOddsTable extends BaseTable {
                 this.calculateAndApplyWidths();
             }
         }
+        this.ensureHeaderMinWidths();
     }
 
     // Backward compatibility alias for main.js resize handler
