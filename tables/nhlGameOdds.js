@@ -3,10 +3,10 @@
 // CRITICAL: renderHorizontal must be "basic" for fitData layout compatibility
 // NHL-specific: team abbreviations
 //
-// MATCHES NBA: On mobile/tablet, skip scanDataForMaxWidths entirely.
-// Tabulator's native fitData layout handles all column sizing on small
-// screens, keeping headers and data cells naturally aligned.
-// Desktop: full scan with canvas measurement + col.setWidth().
+// MATCHES NBA: On mobile/tablet, scanDataForMaxWidths skips entirely and
+// calculateAndApplyWidths clears container widths so Tabulator's native
+// fitData layout sizes headers and data cells to the same width.
+// Desktop: full canvas scan of all columns + container width constraints.
 
 import { BaseTable } from './baseTable.js';
 import { createCustomMultiSelect } from '../components/customMultiSelect.js';
@@ -114,7 +114,6 @@ export class NHLGameOddsTable extends BaseTable {
                 const data = this.table ? this.table.getData() : [];
                 if (data.length > 0) {
                     this.scanDataForMaxWidths(data);
-                    // Desktop-only: equalize clusters and set container width
                     if (!isMobile() && !isTablet()) {
                         this.equalizeClusteredColumns();
                         this.calculateAndApplyWidths();
@@ -134,6 +133,7 @@ export class NHLGameOddsTable extends BaseTable {
                 const data = this.table ? this.table.getData() : [];
                 if (data.length > 0) {
                     this.scanDataForMaxWidths(data);
+                    // Desktop-specific operations
                     if (!isMobile() && !isTablet()) {
                         this.equalizeClusteredColumns();
                         this.calculateAndApplyWidths();
@@ -173,17 +173,43 @@ export class NHLGameOddsTable extends BaseTable {
         this.calculateAndApplyWidths();
     }
 
-    // Desktop: constrains table to content width + scrollbar
+    // MATCHES NBA: Calculate and apply table width based on actual column widths.
+    // On mobile/tablet, CLEARS container widths so Tabulator's fitData sizes naturally.
+    // On desktop, constrains table to content width + scrollbar.
     calculateAndApplyWidths() {
         if (!this.table) return;
-        if (isMobile() || isTablet()) return;
         
+        const tableElement = this.table.element;
+        if (!tableElement) return;
+        
+        const mobile = isMobile();
+        const tablet = isTablet();
+        const isSmallScreen = mobile || tablet;
+        
+        // MOBILE/TABLET: Clear container widths for natural sizing
+        // (matches NBA basketGameOdds.js pattern)
+        if (isSmallScreen) {
+            tableElement.style.width = '';
+            tableElement.style.minWidth = '';
+            tableElement.style.maxWidth = '';
+            
+            const tableContainer = tableElement.closest('.table-container');
+            if (tableContainer) {
+                tableContainer.style.width = '';
+                tableContainer.style.minWidth = '';
+                tableContainer.style.maxWidth = '';
+            }
+            
+            console.log(`NHL Game Odds Mobile/tablet mode: container widths cleared for natural sizing`);
+            return;
+        }
+        
+        // DESKTOP: Set explicit widths
         try {
             const columns = this.table.getColumns();
             let totalColumnWidth = 0;
             columns.forEach(col => { if (col.isVisible()) totalColumnWidth += col.getWidth(); });
             
-            const tableElement = this.table.element;
             const tableHolder = tableElement.querySelector('.tabulator-tableholder');
             const SCROLLBAR_WIDTH = 17;
             const totalWidthWithScrollbar = totalColumnWidth + SCROLLBAR_WIDTH;
@@ -209,7 +235,7 @@ export class NHLGameOddsTable extends BaseTable {
                 tableContainer.style.maxWidth = 'none';
             }
             
-            console.log(`NHL Game Odds: Set table width to ${totalWidthWithScrollbar}px`);
+            console.log(`NHL Game Odds: Set table width to ${totalWidthWithScrollbar}px (columns: ${totalColumnWidth}px + scrollbar: ${SCROLLBAR_WIDTH}px)`);
         } catch (error) {
             console.error('Error in NHL Game Odds calculateAndApplyWidths:', error);
         }
