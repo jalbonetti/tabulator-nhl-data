@@ -1,16 +1,14 @@
 // styles/tableStyles.js - NHL Table Styles
-// MINIMAL STYLES: Exact copy of NBA minimal + ONLY blue header additions
-// Key principle: Webflow provides ALL base formatting (rows, cells, padding, fonts,
-// alternating colors, scrollbars). We only add what Webflow DOESN'T provide:
-//   - Blue header gradient (Webflow provides orange for NBA but nothing for NHL)
-//   - White header text + sort arrows (needed because of blue background)
-//   - Technical fixes identical to NBA (ellipsis, dropdowns, min-max, frozen, grey bg, mobile)
+// PURE COPY of NBA injectMinimalStyles with ZERO color additions.
+// Webflow provides ALL visual styling (headers, rows, cells, alternating, hover).
+// We only add technical fixes (visibility, ellipsis, dropdowns, min-max, frozen, grey bg, mobile).
+// The ONLY color difference from NBA is in tabManager.js (tab button gradient).
 
 import { isMobile, isTablet, getDeviceScale } from '../shared/config.js';
 
 export function injectStyles() {
     if (document.querySelector('style[data-table-styles="webflow"]')) {
-        console.log('Using Webflow custom styles, applying minimal overrides only');
+        console.log('Webflow detected, applying minimal overrides only');
         injectMinimalStyles();
         injectScrollbarFix();
         return;
@@ -18,10 +16,6 @@ export function injectStyles() {
     injectFullStyles();
 }
 
-/**
- * Scrollbar fix - counters Webflow's aggressive hiding
- * Exact copy of NBA version with blue color swap
- */
 function injectScrollbarFix() {
     if (document.querySelector('#nhl-scrollbar-fix')) return;
     
@@ -47,7 +41,7 @@ function injectScrollbarFix() {
             html body .tabulator .tabulator-tableholder::-webkit-scrollbar-thumb,
             html body div.tabulator div.tabulator-tableholder::-webkit-scrollbar-thumb {
                 display: block !important;
-                background: #1e40af !important;
+                background: #888 !important;
                 border-radius: 8px !important;
                 border: 2px solid #f1f1f1 !important;
                 visibility: visible !important;
@@ -55,12 +49,12 @@ function injectScrollbarFix() {
             }
             html body .tabulator .tabulator-tableholder::-webkit-scrollbar-thumb:hover,
             html body div.tabulator div.tabulator-tableholder::-webkit-scrollbar-thumb:hover {
-                background: #1e3a8a !important;
+                background: #666 !important;
             }
             html body .tabulator .tabulator-tableholder,
             html body div.tabulator div.tabulator-tableholder {
                 scrollbar-width: thin !important;
-                scrollbar-color: #1e40af #f1f1f1 !important;
+                scrollbar-color: #888 #f1f1f1 !important;
             }
         }
         @media screen and (max-width: 1024px) {
@@ -83,36 +77,27 @@ function injectScrollbarFix() {
     const webflowStyle = document.querySelector('style[data-table-styles="webflow"]');
     if (webflowStyle && webflowStyle.parentNode) {
         webflowStyle.parentNode.insertBefore(style, webflowStyle.nextSibling);
-        console.log('NHL scrollbar fix injected after Webflow styles');
     } else {
         document.head.appendChild(style);
-        console.log('NHL scrollbar fix injected at end of head');
     }
 }
 
 /**
- * MINIMAL STYLES - For Webflow environment
- * 
- * This is an exact copy of NBA's injectMinimalStyles() with TWO additions:
- *   1. .tabulator-header blue gradient + color (NBA gets orange from Webflow; NHL has no Webflow color)
- *   2. .tabulator-col sort arrow colors (white, for visibility on blue)
- * 
- * Everything else (rows, cells, padding, fonts, alternating colors, borders)
- * is provided by Webflow and MUST NOT be overridden here.
+ * MINIMAL STYLES - Pure copy of NBA injectMinimalStyles.
+ * NO header colors, NO row colors, NO cell padding.
+ * Webflow provides all visual styling.
+ * We only add technical layout fixes.
  */
 function injectMinimalStyles() {
     const style = document.createElement('style');
     style.setAttribute('data-source', 'github-nhl-minimal');
     style.textContent = `
-        /* GitHub NHL table-specific settings only */
-        
-        /* CRITICAL FIX: Force visibility */
+        /* Force visibility */
         .table-wrapper {
             display: block !important;
             visibility: visible !important;
             opacity: 1 !important;
         }
-        
         .tabulator {
             display: block !important;
             visibility: visible !important;
@@ -120,39 +105,13 @@ function injectMinimalStyles() {
             width: 100% !important;
             background: #e8e8e8 !important;
         }
-        
         .table-container {
             display: block !important;
             visibility: visible !important;
             background: #e8e8e8 !important;
         }
         
-        /* ===================================================
-           NHL-SPECIFIC: Blue header gradient + white text
-           This is the ONLY section not in NBA minimal styles.
-           Webflow provides orange headers for NBA but has no
-           NHL-specific color, so we must set it here.
-           =================================================== */
-        .tabulator-header {
-            background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
-            color: white !important;
-        }
-        .tabulator-col {
-            background: transparent !important;
-            border-right: 1px solid rgba(255,255,255,0.2) !important;
-        }
-        .tabulator-col .tabulator-col-sorter .tabulator-arrow {
-            border-bottom-color: rgba(255,255,255,0.6) !important;
-        }
-        .tabulator-col[aria-sort="ascending"] .tabulator-col-sorter .tabulator-arrow {
-            border-bottom-color: white !important;
-        }
-        .tabulator-col[aria-sort="descending"] .tabulator-col-sorter .tabulator-arrow {
-            border-top-color: white !important;
-        }
-        /* END NHL-SPECIFIC ADDITIONS */
-        
-        /* HEADERS: Allow word wrapping, center-justified */
+        /* Headers: word wrap + center (no colors - Webflow provides those) */
         .tabulator-col-title {
             white-space: normal !important;
             word-break: break-word !important;
@@ -163,15 +122,14 @@ function injectMinimalStyles() {
             justify-content: center !important;
         }
         
-        /* DATA CELLS: Single-line with ellipsis */
-        /* NOTE: Do NOT add padding or border rules here - Webflow provides those */
+        /* Data cells: single-line with ellipsis (no padding/border - Webflow provides those) */
         .tabulator-cell {
             white-space: nowrap !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
         }
         
-        /* DROPDOWNS: Position ABOVE the table */
+        /* Dropdowns: position above table */
         .custom-multiselect-dropdown,
         [id^="dropdown_"] {
             z-index: 2147483647 !important;
@@ -215,29 +173,24 @@ function injectMinimalStyles() {
         }
         .min-max-input:focus {
             outline: none !important;
-            border-color: #1e40af !important;
-            box-shadow: 0 0 0 1px rgba(30, 64, 175, 0.2) !important;
+            border-color: #999 !important;
+            box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1) !important;
         }
         
-        /* ===================================================
-           FROZEN COLUMN STYLES
-           Header: blue gradient (matches header above)
-           Data cells: inherit from Webflow (do NOT set explicit colors)
-           Border: 2px for visibility
-           =================================================== */
+        /* Frozen column: z-index + border only. No background colors. */
         .tabulator-frozen {
             z-index: 11 !important;
         }
         .tabulator-frozen.tabulator-frozen-left {
-            border-right: 2px solid rgba(30, 64, 175, 0.4) !important;
+            border-right: 2px solid #cbd5e1 !important;
             box-shadow: 2px 0 4px rgba(0,0,0,0.08) !important;
         }
-        /* Frozen header - blue gradient */
+        /* Frozen header: opaque so content doesn't scroll behind. 
+           Use Webflow's header color (inherit) with z-index */
         .tabulator-header .tabulator-frozen {
-            background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
             z-index: 100 !important;
         }
-        /* Frozen data cells - inherit from Webflow, do NOT set explicit white */
+        /* Frozen data cells: match Webflow's alternating row colors */
         .tabulator-row .tabulator-frozen {
             background: inherit !important;
         }
@@ -245,13 +198,10 @@ function injectMinimalStyles() {
             background: #fafafa !important;
         }
         .tabulator-row:hover .tabulator-frozen {
-            background: #eff6ff !important;
+            background: #fff7ed !important;
         }
         
-        /* ===================================================
-           Standalone header vertical alignment (mobile/tablet)
-           Exact copy of NBA version
-           =================================================== */
+        /* Standalone header alignment (mobile/tablet) */
         @media screen and (max-width: 1024px) {
             .tabulator-header {
                 display: flex !important;
@@ -289,13 +239,9 @@ function injectMinimalStyles() {
                 text-align: center !important;
                 padding-top: 4px !important;
             }
-            /* Frozen header on mobile must be opaque */
-            .tabulator-header .tabulator-frozen {
-                background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
-                z-index: 100 !important;
-            }
+            /* Frozen header on mobile needs opaque bg */
             .tabulator-header .tabulator-col.tabulator-frozen {
-                background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
+                z-index: 100 !important;
             }
         }
         
@@ -305,10 +251,7 @@ function injectMinimalStyles() {
             overflow-x: auto !important;
         }
         
-        /* ===================================================
-           DESKTOP: Grey background fills empty space
-           Exact copy of NBA version
-           =================================================== */
+        /* Desktop: grey background fills empty space */
         @media screen and (min-width: 1025px) {
             .table-container {
                 background: #e8e8e8 !important;
@@ -326,10 +269,7 @@ function injectMinimalStyles() {
             }
         }
         
-        /* ===================================================
-           MOBILE: Frozen column fix
-           Exact copy of NBA version with blue hover color
-           =================================================== */
+        /* Mobile: frozen column constraints */
         @media screen and (max-width: 1024px) {
             .table-container {
                 width: 100% !important;
@@ -358,7 +298,7 @@ function injectMinimalStyles() {
                 background: #ffffff !important;
             }
             .tabulator-row:hover .tabulator-cell.tabulator-frozen {
-                background: #eff6ff !important;
+                background: #fff7ed !important;
             }
             .tabulator-header .tabulator-col.tabulator-frozen {
                 position: sticky !important;
@@ -368,12 +308,11 @@ function injectMinimalStyles() {
         }
     `;
     document.head.appendChild(style);
-    console.log('NHL minimal styles injected (NBA-identical + blue header only)');
+    console.log('NHL minimal styles injected (pure NBA copy, no color overrides)');
 }
 
 /**
- * FULL STYLES - For non-Webflow environments (standalone testing)
- * Complete styling since Webflow isn't providing base formatting
+ * FULL STYLES - For non-Webflow environments only
  */
 function injectFullStyles() {
     const mobile = isMobile();
@@ -451,7 +390,6 @@ function injectFullStyles() {
             text-align: center; white-space: nowrap; overflow: hidden;
             text-overflow: ellipsis; border-radius: 3px;
         }
-        .custom-multiselect-button:hover { border-color: #1e40af; }
         .tabulator-frozen {
             position: sticky !important; left: 0 !important;
             z-index: 10 !important; background: white !important;
@@ -547,10 +485,10 @@ function injectFullStyles() {
                 background: #f1f1f1 !important; border-radius: 8px !important;
             }
             .tabulator .tabulator-tableholder::-webkit-scrollbar-thumb {
-                background: #1e40af !important; border-radius: 8px !important;
+                background: #888 !important; border-radius: 8px !important;
                 border: 2px solid #f1f1f1 !important;
             }
-            .tabulator .tabulator-tableholder::-webkit-scrollbar-thumb:hover { background: #1e3a8a !important; }
+            .tabulator .tabulator-tableholder::-webkit-scrollbar-thumb:hover { background: #666 !important; }
             .tabulator .tabulator-tableholder {
                 overflow-y: scroll !important; overflow-x: auto !important;
                 scrollbar-width: auto !important;
