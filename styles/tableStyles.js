@@ -8,6 +8,9 @@
 // - Header filter inputs now have font-weight: 700 + color: #111 to match NBA Webflow bold/dark text
 // - Frozen column backgrounds use #fafafa/#ffffff/#eff6ff on ALL screen sizes (not just mobile)
 // - Previous frozen colors (#f5f5f5, #fff7ed) corrected to match NBA's Webflow alternating rows
+// - FIXED: Removed font-weight: 600 and color: #333 from .tabulator-col-title
+//   NBA does NOT set these — Webflow provides header font-weight/color.
+//   Bold text is physically wider, causing headers to wrap inside minWidth columns on mobile.
 
 import { isMobile, isTablet, getDeviceScale } from '../shared/config.js';
 
@@ -88,15 +91,10 @@ function injectScrollbarFix() {
 }
 
 /**
- * MINIMAL STYLES - Pure copy of NBA injectMinimalStyles.
- * NO header colors, NO row colors, NO cell padding.
- * Webflow provides all visual styling.
+ * MINIMAL STYLES - Matches NBA injectMinimalStyles pattern.
+ * NO header colors, NO row colors, NO cell padding, NO header font-weight/color.
+ * Webflow provides all visual styling including header font-weight and color.
  * We only add technical layout fixes.
- *
- * FIXES vs previous version:
- * 1) Added header filter input bold/dark text rules
- * 2) Added desktop-level frozen cell background rules (was mobile-only before)
- * 3) Fixed frozen cell colors: #f5f5f5 -> #fafafa, #fff7ed -> #eff6ff
  */
 function injectMinimalStyles() {
     const style = document.createElement('style');
@@ -121,8 +119,10 @@ function injectMinimalStyles() {
             background: #e8e8e8 !important;
         }
         
-        /* Headers: word wrap + center + bold dark text */
-        /* Webflow provides bold headers for NBA; NHL needs it explicitly */
+        /* Headers: word wrap + center */
+        /* MATCHES NBA: No font-weight or color override — Webflow provides those. */
+        /* Bold text (font-weight: 600) is physically wider than normal weight, */
+        /* causing "Median Odds" etc. to exceed minWidth and wrap on mobile. */
         .tabulator-col-title {
             white-space: normal !important;
             word-break: break-word !important;
@@ -131,16 +131,10 @@ function injectMinimalStyles() {
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
-            font-weight: 600 !important;
-            color: #333 !important;
         }
         
-        /* =====================================================
-           FIX #1: Header filter inputs — bold dark text
-           NBA gets this from Webflow theme; NHL Webflow theme
-           does not provide it, so we add it explicitly.
-           Webflow's native bold = 700, native dark text = near-black
-           ===================================================== */
+        /* Header filter inputs — bold dark text */
+        /* NBA gets this from Webflow theme; NHL needs it explicitly */
         .tabulator-header-filter input[type="search"],
         .tabulator-header-filter input[type="text"],
         .tabulator-header-filter input[type="number"],
@@ -165,7 +159,6 @@ function injectMinimalStyles() {
         }
         
         /* Custom multi-select dropdown BUTTON in headers: bold dark text */
-        /* These are <button> elements, not <input>, created by customMultiSelect.js */
         .custom-multiselect-button,
         .tabulator-header-filter .custom-multiselect-button,
         .tabulator-header-filter button {
@@ -263,15 +256,7 @@ function injectMinimalStyles() {
             overflow-x: auto !important;
         }
         
-        /* =====================================================
-           FIX #2: Frozen cell backgrounds — ALL screen sizes
-           Matches NBA pattern exactly: explicit white base,
-           :nth-child(even) for alternating, :hover for highlight.
-           NO background:inherit — that inherits from ROW which has
-           no background (Webflow sets colors on CELLS not ROWS).
-           Uses .tabulator-frozen (not .tabulator-cell.tabulator-frozen)
-           matching the selector pattern that works in NBA.
-           ===================================================== */
+        /* Frozen cell backgrounds — ALL screen sizes */
         .tabulator-frozen {
             z-index: 11 !important;
         }
@@ -346,7 +331,7 @@ function injectMinimalStyles() {
         }
     `;
     document.head.appendChild(style);
-    console.log('NHL minimal styles injected (with header filter bold text, fixed frozen colors, desktop frozen rules)');
+    console.log('NHL minimal styles injected (matching NBA: no header font-weight/color override)');
 }
 
 /**
