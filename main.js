@@ -5,8 +5,8 @@
 // Mounts to: #nhl-table
 //
 // MOBILE FIX: Added injectMobileHeaderFix() after injectStyles().
-// Forces headers to not wrap on mobile — uses high-specificity selectors
-// to beat both tableStyles.js and Webflow's own rules.
+// Changes word-break from break-word to keep-all on mobile so headers
+// can wrap between words but never mid-word.
 
 import { injectStyles } from './styles/tableStyles.js';
 import { NHLMatchupsTable } from './tables/nhlMatchups.js';
@@ -15,15 +15,16 @@ import { NHLGameOddsTable } from './tables/nhlGameOdds.js';
 import { TabManager } from './components/tabManager.js';
 
 /**
- * MOBILE HEADER FIX: Prevent ALL header text wrapping on mobile/tablet.
+ * MOBILE HEADER FIX: Prevent mid-word header text breaking on mobile/tablet.
  * 
  * Problem: tableStyles.js sets .tabulator-col-title { white-space: normal; 
- * word-break: break-word; display: flex; } which allows mid-word breaks.
- * On mobile with many columns, "Book" → "Boo k", "Team" → "Te am", etc.
+ * word-break: break-word; } which allows breaking WITHIN words on mobile.
+ * With narrow columns, "Book" → "Boo k", "Team" → "Te am", etc.
  * 
- * Fix: Use high-specificity selectors with !important to override everything.
- * Also handle the flex display issue — flex containers need min-width: max-content
- * to prevent their text children from being squeezed and wrapping.
+ * Fix: Change word-break to 'keep-all' which still allows wrapping between
+ * words (e.g. "Median Odds" → "Median" / "Odds") but never mid-word.
+ * This preserves Tabulator's column width synchronization while fixing
+ * the visual issue.
  */
 function injectMobileHeaderFix() {
     if (document.querySelector('#nhl-mobile-header-fix')) return;
@@ -32,41 +33,23 @@ function injectMobileHeaderFix() {
     style.id = 'nhl-mobile-header-fix';
     style.textContent = `
         /* =============================================================
-           MOBILE HEADER FIX - HIGH SPECIFICITY
-           Prevents ALL header text wrapping on mobile/tablet.
-           Uses html body prefix for higher specificity than tableStyles.
+           MOBILE HEADER FIX
+           Prevents mid-word header breaks on mobile/tablet.
+           word-break: keep-all allows "Median Odds" → "Median" / "Odds"
+           but prevents "Book" → "Boo" / "k"
            ============================================================= */
         @media screen and (max-width: 1024px) {
-            /* Target the col-title element with max specificity */
             html body .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title,
-            html body div.tabulator div.tabulator-header div.tabulator-col div.tabulator-col-content div.tabulator-col-title,
-            .tabulator-col-title {
-                white-space: nowrap !important;
-                word-break: normal !important;
+            html body div.tabulator div.tabulator-header div.tabulator-col div.tabulator-col-content div.tabulator-col-title {
+                word-break: keep-all !important;
                 overflow-wrap: normal !important;
-                text-overflow: ellipsis !important;
-                overflow: hidden !important;
-                /* With display:flex, the text child can still wrap.
-                   min-width: max-content prevents the flex container from 
-                   being squeezed narrower than its text content. */
-                min-width: max-content !important;
-            }
-            
-            /* Also force the parent column to respect content width */
-            html body .tabulator .tabulator-header .tabulator-col,
-            html body div.tabulator div.tabulator-header div.tabulator-col {
-                min-width: max-content !important;
-            }
-            
-            /* The tabulator header should size to its content, not viewport */
-            .table-container .tabulator .tabulator-header {
-                width: max-content !important;
-                min-width: 100% !important;
+                hyphens: none !important;
+                -webkit-hyphens: none !important;
             }
         }
     `;
     document.head.appendChild(style);
-    console.log('NHL mobile header fix injected: headers forced nowrap with max-content min-width');
+    console.log('NHL mobile header fix injected: word-break changed to keep-all on mobile');
 }
 
 document.addEventListener("DOMContentLoaded", function() {
