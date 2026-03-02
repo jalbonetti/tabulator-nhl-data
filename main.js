@@ -4,7 +4,7 @@
 // No expandable rows, no global expanded state
 // Mounts to: #nhl-table
 //
-// MOBILE FIX v6: nowrap + sort arrow space + compact vertical spacing
+// MOBILE FIX v8: CSS nowrap + JS header width enforcement via polling
 
 import { injectStyles } from './styles/tableStyles.js';
 import { NHLMatchupsTable } from './tables/nhlMatchups.js';
@@ -12,18 +12,16 @@ import { NHLPlayerPropOddsTable } from './tables/nhlPlayerPropOdds.js';
 import { NHLGameOddsTable } from './tables/nhlGameOdds.js';
 import { TabManager } from './components/tabManager.js';
 
+function isMobileViewport() {
+    return window.innerWidth <= 768;
+}
+
+function isTabletViewport() {
+    return window.innerWidth > 768 && window.innerWidth <= 1024;
+}
+
 /**
- * MOBILE HEADER FIX v6
- * 
- * v5 issues: display:block broke vertical layout (extra gap), 4px padding
- * wasn't enough for sort arrow (~18px wide).
- * 
- * v6 approach: Keep display:flex (same as desktop) for proper vertical layout.
- * Just override white-space + word-break to prevent wrapping. The sort arrow
- * is handled by Tabulator as a sibling element inside .tabulator-col-content,
- * so we don't need extra padding — we need the .tabulator-col to be wider.
- * We bump minWidth on column definitions instead, but as a CSS safety net
- * we ensure the arrow area has space.
+ * CSS: Prevent header text wrapping + compact vertical spacing
  */
 function injectMobileHeaderFix() {
     if (document.querySelector('#nhl-mobile-header-fix')) return;
@@ -32,50 +30,118 @@ function injectMobileHeaderFix() {
     style.id = 'nhl-mobile-header-fix';
     style.textContent = `
         @media screen and (max-width: 1024px) {
-            /* Prevent header text wrapping — forces fitData to size columns wider */
+            /* Prevent header text wrapping */
             html body .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title,
             html body div.tabulator div.tabulator-header div.tabulator-col div.tabulator-col-content div.tabulator-col-title {
                 white-space: nowrap !important;
                 word-break: normal !important;
                 overflow-wrap: normal !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                line-height: 1.2 !important;
             }
             
-            /* Compact header vertical spacing to match NBA */
+            /* Compact vertical spacing - target every layer */
             html body .tabulator .tabulator-header .tabulator-col,
             html body div.tabulator div.tabulator-header div.tabulator-col {
-                padding: 0 !important;
+                padding: 2px 0 0 0 !important;
             }
             
             html body .tabulator .tabulator-header .tabulator-col .tabulator-col-content,
             html body div.tabulator div.tabulator-header div.tabulator-col div.tabulator-col-content {
-                padding: 4px 2px 2px 2px !important;
+                padding: 2px 4px 0 4px !important;
             }
             
-            /* Tighten the filter area below header text */
-            html body .tabulator .tabulator-header .tabulator-col .tabulator-header-filter,
-            html body div.tabulator div.tabulator-header div.tabulator-col div.tabulator-header-filter {
-                padding: 0 2px 2px 2px !important;
+            html body .tabulator .tabulator-header-filter,
+            html body div.tabulator div.tabulator-header-filter {
+                padding: 2px 2px 3px 2px !important;
                 margin: 0 !important;
-            }
-            
-            /* Ensure sort arrow doesn't overlap header text.
-               Tabulator places the sort arrow as an ::after or sibling.
-               Give the col-content enough right space for it. */
-            html body .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title-holder,
-            html body div.tabulator div.tabulator-header div.tabulator-col div.tabulator-col-content div.tabulator-col-title-holder {
-                padding-right: 18px !important;
-            }
-            
-            /* Also target the arrow element directly if it exists */
-            html body .tabulator .tabulator-header .tabulator-col .tabulator-col-sorter,
-            html body div.tabulator div.tabulator-header div.tabulator-col div.tabulator-col-sorter {
-                width: 16px !important;
-                min-width: 16px !important;
             }
         }
     `;
     document.head.appendChild(style);
-    console.log('NHL mobile header fix v6: nowrap + sort arrow space + compact vertical');
+    console.log('NHL mobile header fix v8 CSS injected');
+}
+
+/**
+ * JS: After tables render, measure actual header text widths and enforce minimums.
+ * Uses polling to catch tables as they build (avoids monkey-patching timing issues).
+ */
+function setupHeaderWidthEnforcement() {
+    if (!isMobileViewport() && !isTabletViewport()) return;
+    
+    let attempts = 0;
+    const maxAttempts = 20; // Try for 10 seconds (20 * 500ms)
+    
+    const interval = setInterval(() => {
+        attempts++;
+        
+        // Find all tabulator instances on the page
+        const tabulators = document.querySelectorAll('.tabulator');
+        let anyFixed = false;
+        
+        tabulators.forEach(tabEl => {
+            // Skip if already processed
+            if (tabEl.dataset.headersFixed === 'true') return;
+            
+            const headers = tabEl.querySelectorAll('.tabulator-col');
+            if (headers.length === 0) return;
+            
+            headers.forEach(colEl => {
+                const titleEl = colEl.querySelector('.tabulator-col-title');
+                if (!titleEl) return;
+                
+                // scrollWidth = full content width even if currently clipped
+                const textNeeded = titleEl.scrollWidth;
+                const colWidth = colEl.offsetWidth;
+                
+                // If text is wider than column, the header is clipped
+                // Add buffer for sort arrow and subpixel rendering
+                const buffer = 24; // sort arrow (~16px) + safety (8px)
+                const requiredWidth = textNeeded + buffer;
+                
+                if (requiredWidth > colWidth) {
+                    // Find the Tabulator instance and use API to set width
+                    // The column field is in the data-field attribute
+                    const field = colEl.getAttribute('tabulator-field');
+                    if (field && window.nhlTables) {
+                        // Try each table instance
+                        Object.values(window.nhlTables).forEach(tableInstance => {
+                            if (tableInstance.table) {
+                                const col = tableInstance.table.getColumn(field);
+                                if (col && col.getWidth() < requiredWidth) {
+                                    console.log(`Header fix: "${field}" ${col.getWidth()}px → ${Math.ceil(requiredWidth)}px (text: ${textNeeded}px)`);
+                                    col.setWidth(Math.ceil(requiredWidth));
+                                    anyFixed = true;
+                                }
+                            }
+                        });
+                    }
+                }
+            });
+            
+            // Mark this tabulator as processed
+            tabEl.dataset.headersFixed = 'true';
+        });
+        
+        // Stop polling after max attempts or when we've processed visible tables
+        if (attempts >= maxAttempts) {
+            clearInterval(interval);
+            console.log('NHL header width enforcement complete (max attempts reached)');
+        }
+    }, 500);
+    
+    // Also run enforcement when tabs are switched (tab switch reveals hidden tables)
+    document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('tab-button')) {
+            // Reset "fixed" flags so enforcement re-runs for newly visible tables
+            setTimeout(() => {
+                document.querySelectorAll('.tabulator').forEach(t => {
+                    t.dataset.headersFixed = 'false';
+                });
+            }, 300);
+        }
+    });
 }
 
 document.addEventListener("DOMContentLoaded", function() {
@@ -84,7 +150,7 @@ document.addEventListener("DOMContentLoaded", function() {
     // Inject styles first
     injectStyles();
     
-    // MOBILE FIX: Override header wrapping behavior on mobile/tablet
+    // MOBILE FIX: CSS overrides
     injectMobileHeaderFix();
     
     // Find the existing nhl-table element
@@ -110,6 +176,9 @@ document.addEventListener("DOMContentLoaded", function() {
         window.nhlTables = tableInstances;
         
         console.log("NHL table system initialized successfully!");
+        
+        // MOBILE FIX: Start header width enforcement after tables initialize
+        setupHeaderWidthEnforcement();
         
     } catch (error) {
         console.error("Error initializing NHL table system:", error);
