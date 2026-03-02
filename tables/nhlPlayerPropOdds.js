@@ -1,12 +1,16 @@
 // tables/nhlPlayerPropOdds.js - NHL Player Prop Odds Table
-// Matches NBA basketPlayerPropOdds.js pattern for width management
+// EXACT COPY of NBA basketPlayerPropOdds.js pattern for width management.
 // CRITICAL: renderHorizontal must be "basic" for fitData layout compatibility
 // NHL-specific: team abbreviations, prop abbreviations
 //
-// MATCHES NBA: On mobile/tablet, scanDataForMaxWidths only scans Best Odds Books.
-// calculateAndApplyWidths clears container widths on mobile so Tabulator's
-// native fitData layout sizes headers and data cells to the same width.
-// Desktop: full canvas scan of all columns + container width constraints.
+// WIDTH MANAGEMENT (matches NBA exactly):
+// - scanDataForMaxWidths: mobile/tablet only scans Best Odds Books. Desktop scans all.
+// - calculateAndApplyWidths: mobile/tablet CLEARS all container widths. Desktop sets pixel widths.
+// - forceRecalculateWidths: ALWAYS calls both scan + calculateAndApply (no mobile guard).
+//   This ensures mobile path actively clears any desktop widths that were set during
+//   page load (Webflow viewport can start at desktop width then switch to mobile).
+// - Callbacks: tableBuilt/dataLoaded gate equalize+calculate behind desktop check,
+//   but forceRecalculateWidths (called by TabManager) does NOT gate.
 
 import { BaseTable } from './baseTable.js';
 import { createCustomMultiSelect } from '../components/customMultiSelect.js';
@@ -14,7 +18,6 @@ import { createMinMaxFilter, minMaxFilterFunction } from '../components/minMaxFi
 import { createBankrollInput, bankrollFilterFunction, getBankrollValue } from '../components/bankrollInput.js';
 import { isMobile, isTablet } from '../shared/config.js';
 
-// Fixed minimum for Player Name column (longest NHL names + status indicator)
 const NAME_COLUMN_MIN_WIDTH = 205;
 const EV_KELLY_COLUMN_MIN_WIDTH = 65;
 
@@ -22,63 +25,29 @@ export class NHLPlayerPropOddsTable extends BaseTable {
     constructor(elementId) {
         super(elementId, 'HockeyPlayerPropOdds');
         
-        // NHL Team full name to abbreviation mapping (all 32 teams)
         this.teamAbbrevMap = {
-            'Anaheim Ducks': 'ANA',
-            'Boston Bruins': 'BOS',
-            'Buffalo Sabres': 'BUF',
-            'Calgary Flames': 'CGY',
-            'Carolina Hurricanes': 'CAR',
-            'Chicago Blackhawks': 'CHI',
-            'Colorado Avalanche': 'COL',
-            'Columbus Blue Jackets': 'CBJ',
-            'Dallas Stars': 'DAL',
-            'Detroit Red Wings': 'DET',
-            'Edmonton Oilers': 'EDM',
-            'Florida Panthers': 'FLA',
-            'Los Angeles Kings': 'LAK',
-            'LA Kings': 'LAK',
-            'Minnesota Wild': 'MIN',
-            'Montreal Canadiens': 'MTL',
-            'Montréal Canadiens': 'MTL',
-            'Nashville Predators': 'NSH',
-            'New Jersey Devils': 'NJD',
-            'New York Islanders': 'NYI',
-            'NY Islanders': 'NYI',
-            'New York Rangers': 'NYR',
-            'NY Rangers': 'NYR',
-            'Ottawa Senators': 'OTT',
-            'Philadelphia Flyers': 'PHI',
-            'Pittsburgh Penguins': 'PIT',
-            'San Jose Sharks': 'SJS',
-            'Seattle Kraken': 'SEA',
-            'St. Louis Blues': 'STL',
-            'St Louis Blues': 'STL',
-            'Tampa Bay Lightning': 'TBL',
-            'Toronto Maple Leafs': 'TOR',
-            'Utah Hockey Club': 'UTA',
-            'Vancouver Canucks': 'VAN',
-            'Vegas Golden Knights': 'VGK',
-            'Washington Capitals': 'WSH',
-            'Winnipeg Jets': 'WPG',
-            'Arizona Coyotes': 'ARI',
+            'Anaheim Ducks': 'ANA', 'Boston Bruins': 'BOS', 'Buffalo Sabres': 'BUF',
+            'Calgary Flames': 'CGY', 'Carolina Hurricanes': 'CAR', 'Chicago Blackhawks': 'CHI',
+            'Colorado Avalanche': 'COL', 'Columbus Blue Jackets': 'CBJ', 'Dallas Stars': 'DAL',
+            'Detroit Red Wings': 'DET', 'Edmonton Oilers': 'EDM', 'Florida Panthers': 'FLA',
+            'Los Angeles Kings': 'LAK', 'LA Kings': 'LAK', 'Minnesota Wild': 'MIN',
+            'Montreal Canadiens': 'MTL', 'Montréal Canadiens': 'MTL', 'Nashville Predators': 'NSH',
+            'New Jersey Devils': 'NJD', 'New York Islanders': 'NYI', 'NY Islanders': 'NYI',
+            'New York Rangers': 'NYR', 'NY Rangers': 'NYR', 'Ottawa Senators': 'OTT',
+            'Philadelphia Flyers': 'PHI', 'Pittsburgh Penguins': 'PIT', 'San Jose Sharks': 'SJS',
+            'Seattle Kraken': 'SEA', 'St. Louis Blues': 'STL', 'St Louis Blues': 'STL',
+            'Tampa Bay Lightning': 'TBL', 'Toronto Maple Leafs': 'TOR', 'Utah Hockey Club': 'UTA',
+            'Vancouver Canucks': 'VAN', 'Vegas Golden Knights': 'VGK', 'Washington Capitals': 'WSH',
+            'Winnipeg Jets': 'WPG', 'Arizona Coyotes': 'ARI',
         };
 
-        // NHL prop type abbreviation mapping
         this.propAbbrevMap = {
-            'Goals': 'Goals',
-            'Assists': 'Asts',
-            'Points': 'Pts',
-            'Shots on Goal': 'SOG',
-            'Saves': 'Saves',
-            'Blocked Shots': 'Blk',
-            'Hits': 'Hits',
-            'Power Play Points': 'PPP',
-            'Goals + Assists': 'G+A',
+            'Goals': 'Goals', 'Assists': 'Asts', 'Points': 'Pts',
+            'Shots on Goal': 'SOG', 'Saves': 'Saves', 'Blocked Shots': 'Blk',
+            'Hits': 'Hits', 'Power Play Points': 'PPP', 'Goals + Assists': 'G+A',
         };
     }
 
-    // Convert full team names in matchup string to abbreviations
     abbreviateMatchup(matchup) {
         if (!matchup) return '-';
         let abbreviated = matchup;
@@ -89,13 +58,11 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         return abbreviated;
     }
 
-    // Abbreviate prop type for table display
     abbreviateProp(prop) {
         if (!prop) return '-';
         return this.propAbbrevMap[prop] || prop;
     }
 
-    // Abbreviate team name for Team column display
     abbreviateTeam(team) {
         if (!team) return '-';
         return this.teamAbbrevMap[team] || team;
@@ -106,7 +73,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         const tablet = isTablet();
         const isSmallScreen = mobile || tablet;
         
-        // Get base config and override specific settings
         const baseConfig = this.getBaseConfig();
         
         const config = {
@@ -114,7 +80,7 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             virtualDom: true,
             virtualDomBuffer: 500,
             renderVertical: "virtual",
-            renderHorizontal: "basic", // CRITICAL: Use "basic" for compatibility with fitData layout
+            renderHorizontal: "basic",
             pagination: false,
             paginationSize: false,
             layoutColumnsOnNewData: false,
@@ -136,6 +102,8 @@ export class NHLPlayerPropOddsTable extends BaseTable {
 
         this.table = new Tabulator(this.elementId, config);
         
+        // === CALLBACKS: Match NBA basketPlayerPropOdds.js exactly ===
+        
         this.table.on("tableBuilt", () => {
             console.log("NHL Player Prop Odds table built");
             setTimeout(() => {
@@ -147,11 +115,11 @@ export class NHLPlayerPropOddsTable extends BaseTable {
                         this.equalizeClusteredColumns();
                         this.calculateAndApplyWidths();
                     }
+                    this.ensureNameColumnWidth();
                 }
-                // Always ensure minimum Name width is applied
-                this.ensureNameColumnWidth();
             }, 200);
             
+            // Re-adjust on window resize (desktop only)
             window.addEventListener('resize', this.debounce(() => {
                 if (this.table && this.table.getDataCount() > 0 && !isMobile() && !isTablet()) {
                     this.calculateAndApplyWidths();
@@ -160,27 +128,25 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             }, 250));
         });
         
-        this.table.on("renderComplete", () => {
-            if (!isMobile() && !isTablet()) {
-                setTimeout(() => this.calculateAndApplyWidths(), 100);
-            }
-            setTimeout(() => this.ensureNameColumnWidth(), 50);
-        });
-        
         this.table.on("dataLoaded", () => {
             setTimeout(() => {
                 const data = this.table ? this.table.getData() : [];
                 if (data.length > 0) {
                     this.scanDataForMaxWidths(data);
-                    // Desktop-specific operations
                     if (!isMobile() && !isTablet()) {
                         this.equalizeClusteredColumns();
                         this.calculateAndApplyWidths();
                     }
                 }
-                // Always ensure minimum Name width is applied
                 this.ensureNameColumnWidth();
             }, 200);
+        });
+        
+        this.table.on("renderComplete", () => {
+            if (!isMobile() && !isTablet()) {
+                setTimeout(() => this.calculateAndApplyWidths(), 100);
+            }
+            setTimeout(() => this.ensureNameColumnWidth(), 50);
         });
     }
 
@@ -197,7 +163,11 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func.apply(this, args), wait); };
     }
 
-    // Force recalculation of column widths - called by TabManager on tab switch
+    // Called by TabManager on tab switch.
+    // CRITICAL: No mobile guard here — ALWAYS calls calculateAndApplyWidths.
+    // On mobile, calculateAndApplyWidths clears any desktop widths that were set
+    // during page load (Webflow viewport can start at desktop width then switch).
+    // This matches the NBA pattern exactly.
     forceRecalculateWidths() {
         if (!this.table) return;
         console.log('NHL Player Prop Odds forceRecalculateWidths called');
@@ -207,9 +177,10 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             this.scanDataForMaxWidths(data);
             if (!isMobile() && !isTablet()) {
                 this.equalizeClusteredColumns();
-                this.calculateAndApplyWidths();
             }
         }
+        // ALWAYS call - mobile path clears widths, desktop path sets them
+        this.calculateAndApplyWidths();
         this.ensureNameColumnWidth();
     }
 
@@ -217,9 +188,8 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         this.calculateAndApplyWidths();
     }
 
-    // MATCHES NBA: Calculate and apply table width based on actual column widths.
-    // On mobile/tablet, CLEARS container widths so Tabulator's fitData sizes naturally.
-    // On desktop, constrains table to content width + scrollbar.
+    // MATCHES NBA: On mobile/tablet, CLEARS all container widths.
+    // On desktop, sets precise pixel widths.
     calculateAndApplyWidths() {
         if (!this.table) return;
         
@@ -230,8 +200,7 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         const tablet = isTablet();
         const isSmallScreen = mobile || tablet;
         
-        // MOBILE/TABLET: Clear container widths but preserve Name column minimum
-        // (matches NBA basketPlayerPropOdds.js pattern)
+        // MOBILE/TABLET: Clear container widths (matches NBA exactly)
         if (isSmallScreen) {
             tableElement.style.width = '';
             tableElement.style.minWidth = '';
@@ -244,14 +213,13 @@ export class NHLPlayerPropOddsTable extends BaseTable {
                 tableContainer.style.maxWidth = '';
             }
             
-            // Ensure Name column maintains minimum width on mobile
             this.ensureNameColumnWidth();
             
-            console.log(`NHL Player Prop Odds Mobile/tablet mode: container widths cleared, Name column preserved`);
+            console.log(`NHL Player Prop Odds Mobile/tablet: container widths cleared`);
             return;
         }
         
-        // DESKTOP: Set explicit widths
+        // DESKTOP: Set explicit widths (matches NBA exactly)
         try {
             const columns = this.table.getColumns();
             let totalColumnWidth = 0;
@@ -289,8 +257,7 @@ export class NHLPlayerPropOddsTable extends BaseTable {
     }
 
     // MATCHES NBA: On mobile/tablet, only scan Best Odds Books.
-    // All other columns rely on Tabulator's native fitData layout.
-    // Desktop: full scan with canvas measurement + col.setWidth().
+    // Desktop: full scan with canvas measurement.
     scanDataForMaxWidths(data) {
         if (!data || data.length === 0 || !this.table) return;
         
@@ -298,18 +265,15 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         const tablet = isTablet();
         const isSmallScreen = mobile || tablet;
         
-        console.log(`NHL Player Prop Odds Scanning ${data.length} rows for max column widths (mobile: ${mobile}, tablet: ${tablet})...`);
+        console.log(`NHL Player Prop Odds Scanning ${data.length} rows (mobile: ${mobile}, tablet: ${tablet})...`);
         
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         
-        // MATCHES NBA: Only scan Best Odds Books on mobile/tablet.
-        // All other columns use Tabulator's native fitData on small screens.
         const maxWidths = {
-            "Player Best Odds Books": 0  // Always scan on all devices
+            "Player Best Odds Books": 0
         };
         
-        // Only scan additional columns on desktop
         if (!isSmallScreen) {
             maxWidths["Player Matchup"] = 0;
             maxWidths["Player Team"] = 0;
@@ -324,25 +288,16 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             maxWidths["Link"] = 0;
         }
         
-        // First measure header widths (use header font weight)
         ctx.font = '600 12px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
         const HEADER_PADDING = 16;
         const SORT_ICON_WIDTH = 16;
         
-        // Map field names to display titles for header measurement
         const fieldToTitle = {
-            "Player Matchup": "Matchup",
-            "Player Team": "Team",
-            "Player Prop Type": "Prop",
-            "Player Over/Under": "Label",
-            "Player Book": "Book",
-            "Player Prop Odds": "Book Odds",
-            "Player Median Odds": "Median Odds",
-            "Player Best Odds": "Best Odds",
-            "Player Best Odds Books": "Best Books",
-            "EV %": "EV %",
-            "Quarter Kelly %": "Bet Size",
-            "Link": "Link"
+            "Player Matchup": "Matchup", "Player Team": "Team", "Player Prop Type": "Prop",
+            "Player Over/Under": "Label", "Player Book": "Book", "Player Prop Odds": "Book Odds",
+            "Player Median Odds": "Median Odds", "Player Best Odds": "Best Odds",
+            "Player Best Odds Books": "Best Books", "EV %": "EV %",
+            "Quarter Kelly %": "Bet Size", "Link": "Link"
         };
         
         Object.keys(maxWidths).forEach(field => {
@@ -351,7 +306,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             maxWidths[field] = headerWidth;
         });
         
-        // Now measure data widths
         ctx.font = '500 12px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
         
         data.forEach(row => {
@@ -359,7 +313,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
                 const value = row[field];
                 if (value !== null && value !== undefined && value !== '') {
                     let displayValue = String(value);
-                    
                     if (field.includes('Odds') && field !== 'Player Best Odds Books') {
                         const num = parseInt(value, 10);
                         if (!isNaN(num)) displayValue = num > 0 ? `+${num}` : `${num}`;
@@ -383,7 +336,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             });
         });
         
-        // For Player Matchup on desktop, ensure minimum width for longest abbreviated matchup
         const longestAbbrevMatchup = "VGK @ TBL";
         const longestMatchupWidth = ctx.measureText(longestAbbrevMatchup).width;
         if (maxWidths["Player Matchup"] !== undefined && longestMatchupWidth > maxWidths["Player Matchup"]) {
@@ -393,7 +345,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         const CELL_PADDING = 16;
         const BUFFER = 8;
         
-        // Apply widths to scanned columns
         Object.keys(maxWidths).forEach(field => {
             if (maxWidths[field] > 0) {
                 const column = this.table.getColumn(field);
@@ -408,20 +359,16 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             }
         });
         
-        // Ensure Name column has fixed minimum width
         this.ensureNameColumnWidth();
-        
-        console.log('NHL Player Prop Odds Max width scan complete');
+        console.log('NHL Player Prop Odds scan complete');
     }
 
-    // Custom sorters
     oddsSorter(a, b) {
         const getNum = (val) => {
             if (val === null || val === undefined || val === '' || val === '-') return -99999;
             const str = String(val).trim();
             if (str.startsWith('+')) return parseInt(str.substring(1), 10) || -99999;
-            const num = parseInt(str, 10);
-            return isNaN(num) ? -99999 : num;
+            return parseInt(str, 10) || -99999;
         };
         return getNum(a) - getNum(b);
     }
@@ -429,13 +376,11 @@ export class NHLPlayerPropOddsTable extends BaseTable {
     percentSorter(a, b) {
         const getNum = (val) => {
             if (val === null || val === undefined || val === '' || val === '-') return -99999;
-            const num = parseFloat(val);
-            return isNaN(num) ? -99999 : num;
+            return parseFloat(val) || -99999;
         };
         return getNum(a) - getNum(b);
     }
 
-    // Equalize clustered columns (desktop only)
     equalizeClusteredColumns() {
         if (!this.table || isMobile() || isTablet()) return;
         
@@ -445,41 +390,27 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         const CELL_PADDING = 16;
         const SORT_ICON_WIDTH = 20;
         
-        // Group 1: Odds columns
         const oddsCluster = ['Player Prop Odds', 'Player Median Odds', 'Player Best Odds'];
         let maxOddsWidth = 0;
-        
         oddsCluster.forEach(field => {
             const col = this.table.getColumn(field);
-            if (col) {
-                const colWidth = col.getWidth();
-                if (colWidth > maxOddsWidth) maxOddsWidth = colWidth;
-            }
+            if (col && col.getWidth() > maxOddsWidth) maxOddsWidth = col.getWidth();
         });
-        
-        const oddsHeaders = ['Book Odds', 'Median Odds', 'Best Odds'];
-        oddsHeaders.forEach(title => {
-            const headerWidth = ctx.measureText(title).width + CELL_PADDING + SORT_ICON_WIDTH;
-            if (headerWidth > maxOddsWidth) maxOddsWidth = headerWidth;
+        ['Book Odds', 'Median Odds', 'Best Odds'].forEach(title => {
+            const w = ctx.measureText(title).width + CELL_PADDING + SORT_ICON_WIDTH;
+            if (w > maxOddsWidth) maxOddsWidth = w;
         });
-        
         oddsCluster.forEach(field => {
             const col = this.table.getColumn(field);
             if (col) col.setWidth(Math.ceil(maxOddsWidth));
         });
         
-        // Group 2: EV/Kelly columns
         const evKellyCluster = ['EV %', 'Quarter Kelly %'];
         let maxEvKellyWidth = EV_KELLY_COLUMN_MIN_WIDTH;
-        
         evKellyCluster.forEach(field => {
             const col = this.table.getColumn(field);
-            if (col) {
-                const colWidth = col.getWidth();
-                if (colWidth > maxEvKellyWidth) maxEvKellyWidth = colWidth;
-            }
+            if (col && col.getWidth() > maxEvKellyWidth) maxEvKellyWidth = col.getWidth();
         });
-        
         evKellyCluster.forEach(field => {
             const col = this.table.getColumn(field);
             if (col) col.setWidth(Math.ceil(maxEvKellyWidth));
@@ -509,20 +440,17 @@ export class NHLPlayerPropOddsTable extends BaseTable {
 
         const matchupFormatter = (cell) => {
             const value = cell.getValue();
-            if (value === null || value === undefined || value === '') return '-';
-            return self.abbreviateMatchup(value);
+            return value ? self.abbreviateMatchup(value) : '-';
         };
 
         const teamFormatter = (cell) => {
             const value = cell.getValue();
-            if (value === null || value === undefined || value === '') return '-';
-            return self.abbreviateTeam(value);
+            return value ? self.abbreviateTeam(value) : '-';
         };
 
         const propFormatter = (cell) => {
             const value = cell.getValue();
-            if (value === null || value === undefined || value === '') return '-';
-            return self.abbreviateProp(value);
+            return value ? self.abbreviateProp(value) : '-';
         };
 
         const evFormatter = (cell) => {
@@ -539,10 +467,7 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             const num = parseFloat(value);
             if (isNaN(num)) return '-';
             const bankroll = getBankrollValue('NHL Quarter Kelly %');
-            if (bankroll > 0) {
-                const amount = num * bankroll;
-                return '$' + amount.toFixed(2);
-            }
+            if (bankroll > 0) return '$' + (num * bankroll).toFixed(2);
             return (num * 100).toFixed(1) + '%';
         };
 
@@ -550,116 +475,27 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             const value = cell.getValue();
             if (!value || value === '-' || value === '') return '-';
             const a = document.createElement('a');
-            a.href = value;
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
+            a.href = value; a.target = '_blank'; a.rel = 'noopener noreferrer';
             a.textContent = 'Bet';
             a.style.cssText = 'color: #2563eb; text-decoration: underline; font-weight: 500;';
             return a;
         };
 
         return [
-            {
-                title: "Name", field: "Player Name", frozen: true, widthGrow: 0,
-                minWidth: NAME_COLUMN_MIN_WIDTH, sorter: "string", headerFilter: true,
-                resizable: false, hozAlign: "left"
-            },
-            {
-                title: "Matchup", field: "Player Matchup", widthGrow: 0,
-                minWidth: 70,
-                sorter: "string", headerFilter: createCustomMultiSelect,
-                resizable: false, hozAlign: "center", formatter: matchupFormatter
-            },
-            {
-                title: "Team", field: "Player Team", widthGrow: 0,
-                minWidth: 45,
-                sorter: "string", headerFilter: createCustomMultiSelect,
-                resizable: false, hozAlign: "center", formatter: teamFormatter
-            },
-            {
-                title: "Prop", field: "Player Prop Type", widthGrow: 0,
-                minWidth: 55,
-                sorter: "string", headerFilter: createCustomMultiSelect,
-                headerFilterParams: {
-                    valuesLookup: function(cell) {
-                        const values = cell.getTable().getData().map(row => row["Player Prop Type"]);
-                        return [...new Set(values)].filter(v => v != null && v !== '').sort();
-                    }
-                },
-                resizable: false, hozAlign: "center", formatter: propFormatter
-            },
-            {
-                title: "Label", field: "Player Over/Under", widthGrow: 0,
-                minWidth: 50,
-                sorter: "string", headerFilter: createCustomMultiSelect,
-                resizable: false, hozAlign: "center"
-            },
-            {
-                title: "Line", field: "Player Prop Line", widthGrow: 0,
-                minWidth: 50,
-                sorter: "number",
-                headerFilter: createMinMaxFilter, headerFilterFunc: minMaxFilterFunction,
-                headerFilterLiveFilter: false, resizable: false,
-                formatter: lineFormatter, hozAlign: "center"
-            },
-            {
-                title: "Book", field: "Player Book", widthGrow: 0,
-                minWidth: 60,
-                sorter: "string", headerFilter: createCustomMultiSelect,
-                resizable: false, hozAlign: "center"
-            },
-            {
-                title: "Book Odds", field: "Player Prop Odds", widthGrow: 0,
-                minWidth: 55,
-                sorter: function(a, b) { return self.oddsSorter(a, b); },
-                headerFilter: createMinMaxFilter, headerFilterFunc: minMaxFilterFunction,
-                headerFilterLiveFilter: false, resizable: false,
-                formatter: oddsFormatter, hozAlign: "center", cssClass: "cluster-odds"
-            },
-            {
-                title: "Median Odds", field: "Player Median Odds", widthGrow: 0,
-                minWidth: 55,
-                sorter: function(a, b) { return self.oddsSorter(a, b); },
-                headerFilter: createMinMaxFilter, headerFilterFunc: minMaxFilterFunction,
-                headerFilterLiveFilter: false, resizable: false,
-                formatter: oddsFormatter, hozAlign: "center", cssClass: "cluster-odds"
-            },
-            {
-                title: "Best Odds", field: "Player Best Odds", widthGrow: 0,
-                minWidth: 55,
-                sorter: function(a, b) { return self.oddsSorter(a, b); },
-                headerFilter: createMinMaxFilter, headerFilterFunc: minMaxFilterFunction,
-                headerFilterLiveFilter: false, resizable: false,
-                formatter: oddsFormatter, hozAlign: "center", cssClass: "cluster-odds"
-            },
-            {
-                title: "Best Books", field: "Player Best Odds Books", widthGrow: 0,
-                minWidth: 70,
-                sorter: "string", resizable: false, hozAlign: "center"
-            },
-            {
-                title: "EV %", field: "EV %", widthGrow: 0,
-                minWidth: EV_KELLY_COLUMN_MIN_WIDTH,
-                sorter: function(a, b) { return self.percentSorter(a, b); },
-                resizable: false, formatter: evFormatter,
-                hozAlign: "center", cssClass: "cluster-ev-kelly"
-            },
-            {
-                title: "Bet Size", field: "Quarter Kelly %", widthGrow: 0,
-                minWidth: EV_KELLY_COLUMN_MIN_WIDTH,
-                sorter: function(a, b) { return self.percentSorter(a, b); },
-                headerFilter: createBankrollInput, headerFilterFunc: bankrollFilterFunction,
-                headerFilterLiveFilter: false,
-                headerFilterParams: { bankrollKey: 'NHL Quarter Kelly %' },
-                resizable: false, formatter: kellyFormatter,
-                hozAlign: "center", cssClass: "cluster-ev-kelly"
-            },
-            {
-                title: "Link", field: "Link", width: 50, widthGrow: 0,
-                minWidth: 40, maxWidth: 50,
-                sorter: "string", resizable: false, hozAlign: "center",
-                formatter: linkFormatter, headerSort: false
-            }
+            { title: "Name", field: "Player Name", frozen: true, widthGrow: 0, minWidth: NAME_COLUMN_MIN_WIDTH, sorter: "string", headerFilter: true, resizable: false, hozAlign: "left" },
+            { title: "Matchup", field: "Player Matchup", widthGrow: 0, minWidth: 70, sorter: "string", headerFilter: createCustomMultiSelect, resizable: false, hozAlign: "center", formatter: matchupFormatter },
+            { title: "Team", field: "Player Team", widthGrow: 0, minWidth: 45, sorter: "string", headerFilter: createCustomMultiSelect, resizable: false, hozAlign: "center", formatter: teamFormatter },
+            { title: "Prop", field: "Player Prop Type", widthGrow: 0, minWidth: 55, sorter: "string", headerFilter: createCustomMultiSelect, headerFilterParams: { valuesLookup: function(cell) { return [...new Set(cell.getTable().getData().map(row => row["Player Prop Type"]))].filter(v => v != null && v !== '').sort(); } }, resizable: false, hozAlign: "center", formatter: propFormatter },
+            { title: "Label", field: "Player Over/Under", widthGrow: 0, minWidth: 50, sorter: "string", headerFilter: createCustomMultiSelect, resizable: false, hozAlign: "center" },
+            { title: "Line", field: "Player Prop Line", widthGrow: 0, minWidth: 50, sorter: "number", headerFilter: createMinMaxFilter, headerFilterFunc: minMaxFilterFunction, headerFilterLiveFilter: false, resizable: false, formatter: lineFormatter, hozAlign: "center" },
+            { title: "Book", field: "Player Book", widthGrow: 0, minWidth: 60, sorter: "string", headerFilter: createCustomMultiSelect, resizable: false, hozAlign: "center" },
+            { title: "Book Odds", field: "Player Prop Odds", widthGrow: 0, minWidth: 55, sorter: function(a, b) { return self.oddsSorter(a, b); }, headerFilter: createMinMaxFilter, headerFilterFunc: minMaxFilterFunction, headerFilterLiveFilter: false, resizable: false, formatter: oddsFormatter, hozAlign: "center", cssClass: "cluster-odds" },
+            { title: "Median Odds", field: "Player Median Odds", widthGrow: 0, minWidth: 55, sorter: function(a, b) { return self.oddsSorter(a, b); }, headerFilter: createMinMaxFilter, headerFilterFunc: minMaxFilterFunction, headerFilterLiveFilter: false, resizable: false, formatter: oddsFormatter, hozAlign: "center", cssClass: "cluster-odds" },
+            { title: "Best Odds", field: "Player Best Odds", widthGrow: 0, minWidth: 55, sorter: function(a, b) { return self.oddsSorter(a, b); }, headerFilter: createMinMaxFilter, headerFilterFunc: minMaxFilterFunction, headerFilterLiveFilter: false, resizable: false, formatter: oddsFormatter, hozAlign: "center", cssClass: "cluster-odds" },
+            { title: "Best Books", field: "Player Best Odds Books", widthGrow: 0, minWidth: 70, sorter: "string", resizable: false, hozAlign: "center" },
+            { title: "EV %", field: "EV %", widthGrow: 0, minWidth: EV_KELLY_COLUMN_MIN_WIDTH, sorter: function(a, b) { return self.percentSorter(a, b); }, resizable: false, formatter: evFormatter, hozAlign: "center", cssClass: "cluster-ev-kelly" },
+            { title: "Bet Size", field: "Quarter Kelly %", widthGrow: 0, minWidth: EV_KELLY_COLUMN_MIN_WIDTH, sorter: function(a, b) { return self.percentSorter(a, b); }, headerFilter: createBankrollInput, headerFilterFunc: bankrollFilterFunction, headerFilterLiveFilter: false, headerFilterParams: { bankrollKey: 'NHL Quarter Kelly %' }, resizable: false, formatter: kellyFormatter, hozAlign: "center", cssClass: "cluster-ev-kelly" },
+            { title: "Link", field: "Link", width: 50, widthGrow: 0, minWidth: 40, maxWidth: 50, sorter: "string", resizable: false, hozAlign: "center", formatter: linkFormatter, headerSort: false }
         ];
     }
 }
