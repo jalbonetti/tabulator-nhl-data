@@ -242,9 +242,11 @@ function injectMinimalStyles() {
         @media screen and (min-width: 1025px) {
             .table-container {
                 background: #e8e8e8 !important;
+                width: 100% !important;
             }
             .tabulator {
                 background: #e8e8e8 !important;
+                width: 100% !important;
             }
             .tabulator .tabulator-tableholder {
                 background: #e8e8e8 !important;
