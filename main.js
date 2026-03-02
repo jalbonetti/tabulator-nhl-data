@@ -5,9 +5,8 @@
 // Mounts to: #nhl-table
 //
 // MOBILE FIX: Added injectMobileHeaderFix() after injectStyles().
-// This overrides the word-break: break-word CSS on mobile so headers
-// can't break mid-word (e.g. "Book" → "Boo k"). Headers stay on one
-// line, columns size to fit header text, table scrolls horizontally.
+// Forces headers to not wrap on mobile — uses high-specificity selectors
+// to beat both tableStyles.js and Webflow's own rules.
 
 import { injectStyles } from './styles/tableStyles.js';
 import { NHLMatchupsTable } from './tables/nhlMatchups.js';
@@ -16,18 +15,15 @@ import { NHLGameOddsTable } from './tables/nhlGameOdds.js';
 import { TabManager } from './components/tabManager.js';
 
 /**
- * MOBILE HEADER FIX: Prevent mid-word header wrapping on mobile/tablet.
+ * MOBILE HEADER FIX: Prevent ALL header text wrapping on mobile/tablet.
  * 
- * The existing CSS has:
- *   .tabulator-col-title { white-space: normal; word-break: break-word; }
+ * Problem: tableStyles.js sets .tabulator-col-title { white-space: normal; 
+ * word-break: break-word; display: flex; } which allows mid-word breaks.
+ * On mobile with many columns, "Book" → "Boo k", "Team" → "Te am", etc.
  * 
- * This allows headers to wrap AND break mid-word when columns are narrow.
- * On mobile (14 columns squeezed to viewport width), each column gets ~40-50px,
- * so "Book" becomes "Boo" + "k", "Median Odds" becomes "Med" + "ian" + "Odds".
- * 
- * This fix forces headers to stay on one line on mobile. Each column then
- * sizes to fit its header text, making the table wider than the viewport.
- * The existing overflow-x: auto on the tableholder enables horizontal scroll.
+ * Fix: Use high-specificity selectors with !important to override everything.
+ * Also handle the flex display issue — flex containers need min-width: max-content
+ * to prevent their text children from being squeezed and wrapping.
  */
 function injectMobileHeaderFix() {
     if (document.querySelector('#nhl-mobile-header-fix')) return;
@@ -35,18 +31,42 @@ function injectMobileHeaderFix() {
     const style = document.createElement('style');
     style.id = 'nhl-mobile-header-fix';
     style.textContent = `
+        /* =============================================================
+           MOBILE HEADER FIX - HIGH SPECIFICITY
+           Prevents ALL header text wrapping on mobile/tablet.
+           Uses html body prefix for higher specificity than tableStyles.
+           ============================================================= */
         @media screen and (max-width: 1024px) {
+            /* Target the col-title element with max specificity */
+            html body .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title,
+            html body div.tabulator div.tabulator-header div.tabulator-col div.tabulator-col-content div.tabulator-col-title,
             .tabulator-col-title {
                 white-space: nowrap !important;
                 word-break: normal !important;
                 overflow-wrap: normal !important;
                 text-overflow: ellipsis !important;
                 overflow: hidden !important;
+                /* With display:flex, the text child can still wrap.
+                   min-width: max-content prevents the flex container from 
+                   being squeezed narrower than its text content. */
+                min-width: max-content !important;
+            }
+            
+            /* Also force the parent column to respect content width */
+            html body .tabulator .tabulator-header .tabulator-col,
+            html body div.tabulator div.tabulator-header div.tabulator-col {
+                min-width: max-content !important;
+            }
+            
+            /* The tabulator header should size to its content, not viewport */
+            .table-container .tabulator .tabulator-header {
+                width: max-content !important;
+                min-width: 100% !important;
             }
         }
     `;
     document.head.appendChild(style);
-    console.log('NHL mobile header fix injected: headers will not wrap on mobile');
+    console.log('NHL mobile header fix injected: headers forced nowrap with max-content min-width');
 }
 
 document.addEventListener("DOMContentLoaded", function() {
