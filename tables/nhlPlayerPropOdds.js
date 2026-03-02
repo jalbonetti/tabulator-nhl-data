@@ -3,20 +3,21 @@
 // CRITICAL: renderHorizontal must be "basic" for fitData layout compatibility
 // NHL-specific: team abbreviations, prop abbreviations
 //
-// WIDTH MANAGEMENT (matches NBA exactly):
+// WIDTH MANAGEMENT:
 // - scanDataForMaxWidths: mobile/tablet only scans Best Odds Books. Desktop scans all.
-// - calculateAndApplyWidths: mobile/tablet sets explicit pixel widths so tabulator
-//   can overflow the container (container scrolls horizontally). Desktop sets pixel widths.
+// - calculateAndApplyWidths: Sets explicit pixel widths on ALL devices.
+//   Mobile: tabulator overflows container, container scrolls horizontally.
+//   Desktop: container wraps to fit-content.
 // - forceRecalculateWidths: ALWAYS calls both scan + calculateAndApply (no mobile guard).
-//   This ensures mobile path actively sets proper widths regardless of CSS constraints.
-// - Callbacks: tableBuilt/dataLoaded gate equalize+calculate behind desktop check,
-//   but forceRecalculateWidths (called by TabManager) does NOT gate.
 //
-// MOBILE FIX: Previously, calculateAndApplyWidths on mobile just cleared all widths,
-// letting CSS `max-width: 100% !important` from tableStyles.js crush all columns into
-// the viewport width. This caused header text to wrap mid-word ("Matchu p", "Te a m").
-// Now we inject container-specific CSS overrides (matching nhlMatchups.js pattern) and
-// set explicit pixel widths on mobile so columns maintain their natural size.
+// MOBILE FIX: Container-specific CSS overrides remove the blanket max-width:100%
+// constraint from tableStyles.js, and we set explicit pixel widths so columns
+// maintain their natural size. Header titles use white-space:nowrap to prevent
+// multi-word headers like "Book Odds" from wrapping.
+//
+// FIRST-LOAD FIX: tableBuilt no longer runs premature width calculations before
+// data arrives. The dataLoaded callback handles the first meaningful recalculation.
+// renderComplete is gated behind this.dataLoaded to avoid pre-data recalculations.
 
 import { BaseTable } from './baseTable.js';
 import { createCustomMultiSelect } from '../components/customMultiSelect.js';
@@ -55,12 +56,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         };
     }
 
-    // =========================================================================
-    // MOBILE FIX: Inject container-specific CSS overrides for #table1-container
-    // This mirrors what nhlMatchups.js does for #table0-container.
-    // On mobile, we need the container to scroll horizontally while the tabulator
-    // element can be wider than the viewport.
-    // =========================================================================
     _injectPropOddsStyles() {
         if (this._stylesInjected) return;
         const styleId = 'nhl-prop-odds-width-override';
@@ -69,35 +64,21 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         const style = document.createElement('style');
         style.id = styleId;
         style.textContent = `
-            /* =====================================================
-               DESKTOP (>1024px): Override blanket rules so JS can
-               set tight pixel widths. Container wraps to content.
-               ===================================================== */
             @media screen and (min-width: 1025px) {
                 #table1-container {
                     width: fit-content !important;
                     max-width: none !important;
                     overflow-x: visible !important;
                 }
-                
                 #table1-container .tabulator {
                     width: auto !important;
                     max-width: none !important;
                 }
-                
                 #table1-container .tabulator .tabulator-tableholder {
                     overflow-y: auto !important;
                 }
             }
             
-            /* =====================================================
-               MOBILE/TABLET (<=1024px): 
-               - Container: capped to viewport, scrolls horizontally
-               - Tabulator: must NOT be constrained to container width.
-                 We remove the max-width:100% that tableStyles.js sets,
-                 so the tabulator can be wider than the container.
-                 JS inline styles set the actual pixel width.
-               ===================================================== */
             @media screen and (max-width: 1024px) {
                 #table1-container {
                     max-width: 100vw !important;
@@ -105,15 +86,21 @@ export class NHLPlayerPropOddsTable extends BaseTable {
                     overflow-y: visible !important;
                     -webkit-overflow-scrolling: touch !important;
                 }
-                
                 #table1-container .tabulator {
                     max-width: none !important;
                     min-width: 0 !important;
                 }
-                
                 #table1-container .tabulator .tabulator-tableholder {
                     overflow-x: visible !important;
                     overflow-y: auto !important;
+                }
+                /* HEADER FIX: Prevent multi-word headers from wrapping.
+                   tableStyles.js sets white-space:normal globally, but since
+                   we set explicit pixel widths, columns won't be squeezed. */
+                #table1-container .tabulator-col-title {
+                    white-space: nowrap !important;
+                    word-break: normal !important;
+                    overflow-wrap: normal !important;
                 }
             }
         `;
@@ -143,7 +130,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
     }
 
     initialize() {
-        // Inject container-specific CSS overrides BEFORE building the table
         this._injectPropOddsStyles();
         
         const mobile = isMobile();
@@ -179,24 +165,13 @@ export class NHLPlayerPropOddsTable extends BaseTable {
 
         this.table = new Tabulator(this.elementId, config);
         
-        // === CALLBACKS: Match NBA basketPlayerPropOdds.js exactly ===
+        // === CALLBACKS ===
         
         this.table.on("tableBuilt", () => {
             console.log("NHL Player Prop Odds table built");
-            setTimeout(() => {
-                const data = this.table ? this.table.getData() : [];
-                if (data.length > 0) {
-                    this.scanDataForMaxWidths(data);
-                    // Desktop-only: equalize clusters and set container width
-                    if (!isMobile() && !isTablet()) {
-                        this.equalizeClusteredColumns();
-                    }
-                    this.calculateAndApplyWidths();
-                    this.ensureNameColumnWidth();
-                }
-            }, 200);
+            // Don't recalculate widths here — data hasn't loaded yet via AJAX.
+            // The dataLoaded callback below handles the first meaningful recalculation.
             
-            // Re-adjust on window resize
             window.addEventListener('resize', this.debounce(() => {
                 if (this.table && this.table.getDataCount() > 0) {
                     this.calculateAndApplyWidths();
@@ -206,6 +181,8 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         });
         
         this.table.on("dataLoaded", () => {
+            // FIRST-LOAD FIX: This is the first time we have real data.
+            // Run the full scan + equalize + calculate sequence now.
             setTimeout(() => {
                 const data = this.table ? this.table.getData() : [];
                 if (data.length > 0) {
@@ -214,14 +191,17 @@ export class NHLPlayerPropOddsTable extends BaseTable {
                         this.equalizeClusteredColumns();
                     }
                     this.calculateAndApplyWidths();
+                    this.ensureNameColumnWidth();
                 }
-                this.ensureNameColumnWidth();
-            }, 200);
+            }, 100);
         });
         
         this.table.on("renderComplete", () => {
-            setTimeout(() => this.calculateAndApplyWidths(), 100);
-            setTimeout(() => this.ensureNameColumnWidth(), 50);
+            // Only recalculate after data has loaded to avoid premature width setting
+            if (this.dataLoaded) {
+                setTimeout(() => this.calculateAndApplyWidths(), 100);
+                setTimeout(() => this.ensureNameColumnWidth(), 50);
+            }
         });
     }
 
@@ -238,10 +218,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func.apply(this, args), wait); };
     }
 
-    // Called by TabManager on tab switch.
-    // CRITICAL: No mobile guard here — ALWAYS calls calculateAndApplyWidths.
-    // On mobile, calculateAndApplyWidths now sets explicit pixel widths
-    // so columns don't get crushed by CSS max-width:100%.
     forceRecalculateWidths() {
         if (!this.table) return;
         console.log('NHL Player Prop Odds forceRecalculateWidths called');
@@ -253,7 +229,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
                 this.equalizeClusteredColumns();
             }
         }
-        // ALWAYS call - mobile path sets explicit widths, desktop path sets them too
         this.calculateAndApplyWidths();
         this.ensureNameColumnWidth();
     }
@@ -262,14 +237,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         this.calculateAndApplyWidths();
     }
 
-    // =========================================================================
-    // FIXED: On mobile/tablet, instead of just clearing widths (which lets
-    // CSS max-width:100% crush columns), we now set explicit pixel widths
-    // matching the nhlMatchups.js pattern. The container-specific CSS overrides
-    // injected by _injectPropOddsStyles() remove the max-width constraint on
-    // the tabulator, so it can be wider than the container and scroll.
-    // On desktop, sets precise pixel widths (unchanged).
-    // =========================================================================
     calculateAndApplyWidths() {
         if (!this.table) return;
         
@@ -289,10 +256,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             const SCROLLBAR_WIDTH = isSmallScreen ? 0 : 17;
             const totalWidth = totalColumnWidth + SCROLLBAR_WIDTH;
             
-            // Set tabulator to exact content width.
-            // On desktop: CSS width:auto!important lets these inline styles work freely.
-            // On mobile: Our injected CSS removes the max-width:100% constraint for
-            //   #table1-container .tabulator, so these inline styles take effect.
             tableElement.style.width = totalWidth + 'px';
             tableElement.style.minWidth = totalWidth + 'px';
             tableElement.style.maxWidth = totalWidth + 'px';
@@ -305,7 +268,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             const header = tableElement.querySelector('.tabulator-header');
             if (header) header.style.width = totalWidth + 'px';
             
-            // On mobile: also override TabManager's inline styles on the container.
             if (isSmallScreen) {
                 const tc = tableElement.closest('.table-container');
                 if (tc) {
@@ -313,13 +275,10 @@ export class NHLPlayerPropOddsTable extends BaseTable {
                     tc.style.minWidth = '';
                     tc.style.overflowX = '';
                 }
-                
-                // Use !important to override any remaining CSS constraints
                 tableElement.style.setProperty('width', totalWidth + 'px', 'important');
                 tableElement.style.setProperty('min-width', totalWidth + 'px', 'important');
                 tableElement.style.setProperty('max-width', totalWidth + 'px', 'important');
             } else {
-                // Desktop: set container to fit-content
                 const tableContainer = tableElement.closest('.table-container');
                 if (tableContainer) {
                     tableContainer.style.width = 'fit-content';
@@ -336,8 +295,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         }
     }
 
-    // MATCHES NBA: On mobile/tablet, only scan Best Odds Books.
-    // Desktop: full scan with canvas measurement.
     scanDataForMaxWidths(data) {
         if (!data || data.length === 0 || !this.table) return;
         
