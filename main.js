@@ -1,4 +1,5 @@
 // main.js - NHL Props Table System
+// Based on NBA basketball main.js pattern
 // 3 tables: Matchups, Prop Odds, Game Odds
 // No expandable rows, no global expanded state
 // Mounts to: #nhl-table
@@ -25,7 +26,7 @@ document.addEventListener("DOMContentLoaded", function() {
     console.log("Found nhl-table element, creating structure...");
 
     try {
-        createTableStructure(existingTable);
+        createCompleteTableStructure(existingTable);
         
         const tableInstances = {
             table0: new NHLMatchupsTable("#matchups-table"),
@@ -44,51 +45,44 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 });
 
-function createTableStructure(container) {
-    container.innerHTML = '';
+function createCompleteTableStructure(existingTable) {
+    console.log("Creating complete DOM structure...");
     
-    // Create wrapper
-    const wrapper = document.createElement('div');
-    wrapper.className = 'table-wrapper';
+    // Create main wrapper
+    const tabWrapper = document.createElement('div');
+    tabWrapper.className = 'table-wrapper';
+    tabWrapper.style.cssText = 'display: flex; flex-direction: column; align-items: center; width: 100%; margin: 0 auto;';
     
     // Create tabs container
     const tabsContainer = document.createElement('div');
     tabsContainer.className = 'tabs-container';
-    
-    const tabButtons = document.createElement('div');
-    tabButtons.className = 'tab-buttons';
-    
-    const tabs = [
-        { id: 'table0', label: 'Matchups' },
-        { id: 'table1', label: 'Prop Odds' },
-        { id: 'table2', label: 'Game Odds' }
-    ];
-    
-    tabs.forEach((tab, index) => {
-        const btn = document.createElement('button');
-        btn.className = 'tab-button' + (index === 0 ? ' active' : '');
-        btn.setAttribute('data-tab', tab.id);
-        btn.textContent = tab.label;
-        tabButtons.appendChild(btn);
-    });
-    
-    tabsContainer.appendChild(tabButtons);
-    wrapper.appendChild(tabsContainer);
+    tabsContainer.innerHTML = `
+        <div class="tab-buttons">
+            <button class="tab-button active" data-tab="table0">Matchups</button>
+            <button class="tab-button" data-tab="table1">Prop Odds</button>
+            <button class="tab-button" data-tab="table2">Game Odds</button>
+        </div>
+    `;
     
     // Create tables container
     const tablesContainer = document.createElement('div');
     tablesContainer.className = 'tables-container';
+    tablesContainer.style.cssText = 'width: 100%; position: relative;';
     
+    // Create individual table containers (matching NBA pattern: table0-container, etc.)
     const tableConfigs = [
-        { id: 'table0', tableId: 'matchups-table' },
-        { id: 'table1', tableId: 'prop-odds-table' },
-        { id: 'table2', tableId: 'game-odds-table' }
+        { tabId: 'table0', tableId: 'matchups-table', active: true },
+        { tabId: 'table1', tableId: 'prop-odds-table', active: false },
+        { tabId: 'table2', tableId: 'game-odds-table', active: false }
     ];
     
-    tableConfigs.forEach((config, index) => {
+    tableConfigs.forEach(config => {
         const tableContainer = document.createElement('div');
-        tableContainer.id = `${config.id}-container`;
-        tableContainer.className = 'table-container' + (index === 0 ? ' active-table' : ' inactive-table');
+        tableContainer.id = `${config.tabId}-container`;
+        tableContainer.className = `table-container ${config.active ? 'active-table' : 'inactive-table'}`;
+        if (!config.active) {
+            tableContainer.style.display = 'none';
+        }
         
         const tableDiv = document.createElement('div');
         tableDiv.id = config.tableId;
@@ -97,8 +91,14 @@ function createTableStructure(container) {
         tablesContainer.appendChild(tableContainer);
     });
     
-    wrapper.appendChild(tablesContainer);
-    container.appendChild(wrapper);
+    tabWrapper.appendChild(tabsContainer);
+    tabWrapper.appendChild(tablesContainer);
+    
+    // Insert BEFORE the existing element and hide original (NBA pattern)
+    if (existingTable.parentElement) {
+        existingTable.parentElement.insertBefore(tabWrapper, existingTable);
+        existingTable.style.display = 'none';
+    }
     
     console.log("NHL table structure created");
 }
