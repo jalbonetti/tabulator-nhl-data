@@ -4,8 +4,9 @@
 // No expandable rows, no global expanded state
 // Mounts to: #nhl-table
 //
-// MOBILE FIX: CSS white-space: nowrap on mobile headers prevents wrapping.
-// The JS fix is in the table files: forceRecalculateWidths() always calls
+// NO CSS HEADER OVERRIDES — tableStyles.js white-space: normal + Tabulator
+// fitData handles mobile headers the same as NBA/NCAAM. The only fix needed
+// is in the JS files: forceRecalculateWidths() always calls
 // calculateAndApplyWidths() which clears desktop widths on mobile.
 
 import { injectStyles } from './styles/tableStyles.js';
@@ -14,34 +15,10 @@ import { NHLPlayerPropOddsTable } from './tables/nhlPlayerPropOdds.js';
 import { NHLGameOddsTable } from './tables/nhlGameOdds.js';
 import { TabManager } from './components/tabManager.js';
 
-/**
- * CSS: Prevent header text wrapping on mobile.
- * Forces Tabulator's fitData to size columns to header width.
- * High-specificity selector to beat tableStyles.js rule.
- */
-function injectMobileHeaderFix() {
-    if (document.querySelector('#nhl-mobile-header-fix')) return;
-    
-    const style = document.createElement('style');
-    style.id = 'nhl-mobile-header-fix';
-    style.textContent = `
-        @media screen and (max-width: 1024px) {
-            html body .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title {
-                white-space: nowrap !important;
-                word-break: normal !important;
-                overflow-wrap: normal !important;
-            }
-        }
-    `;
-    document.head.appendChild(style);
-    console.log('NHL mobile header fix: white-space nowrap on mobile');
-}
-
 document.addEventListener("DOMContentLoaded", function() {
     console.log("DOM loaded - initializing NHL table system");
     
     injectStyles();
-    injectMobileHeaderFix();
     
     const existingTable = document.getElementById('nhl-table');
     if (!existingTable) {
