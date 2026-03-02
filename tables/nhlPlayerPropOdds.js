@@ -607,13 +607,13 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             },
             {
                 title: "Label", field: "Player Over/Under", widthGrow: 0,
-                minWidth: 50,
+                minWidth: 55,
                 sorter: "string", headerFilter: createCustomMultiSelect,
                 resizable: false, hozAlign: "center"
             },
             {
                 title: "Line", field: "Player Prop Line", widthGrow: 0,
-                minWidth: 50,
+                minWidth: 55,
                 sorter: "number",
                 headerFilter: createMinMaxFilter, headerFilterFunc: minMaxFilterFunction,
                 headerFilterLiveFilter: false, resizable: false,
