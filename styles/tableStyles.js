@@ -1,8 +1,10 @@
 // styles/tableStyles.js - NHL Table Styles
-// Color mapping from NBA: #f97316->#1e40af, #ea580c->#1e3a8a, #fff7ed->#eff6ff
-// KEY FIX: injectMinimalStyles now includes FULL header theming because the
-// Webflow site doesn't have a custom NHL color stylesheet (unlike NBA which has
-// Webflow-provided orange headers). Without this, headers fall back to Webflow default grey.
+// MINIMAL STYLES: Exact copy of NBA minimal + ONLY blue header additions
+// Key principle: Webflow provides ALL base formatting (rows, cells, padding, fonts,
+// alternating colors, scrollbars). We only add what Webflow DOESN'T provide:
+//   - Blue header gradient (Webflow provides orange for NBA but nothing for NHL)
+//   - White header text + sort arrows (needed because of blue background)
+//   - Technical fixes identical to NBA (ellipsis, dropdowns, min-max, frozen, grey bg, mobile)
 
 import { isMobile, isTablet, getDeviceScale } from '../shared/config.js';
 
@@ -16,6 +18,10 @@ export function injectStyles() {
     injectFullStyles();
 }
 
+/**
+ * Scrollbar fix - counters Webflow's aggressive hiding
+ * Exact copy of NBA version with blue color swap
+ */
 function injectScrollbarFix() {
     if (document.querySelector('#nhl-scrollbar-fix')) return;
     
@@ -77,27 +83,36 @@ function injectScrollbarFix() {
     const webflowStyle = document.querySelector('style[data-table-styles="webflow"]');
     if (webflowStyle && webflowStyle.parentNode) {
         webflowStyle.parentNode.insertBefore(style, webflowStyle.nextSibling);
+        console.log('NHL scrollbar fix injected after Webflow styles');
     } else {
         document.head.appendChild(style);
+        console.log('NHL scrollbar fix injected at end of head');
     }
 }
 
+/**
+ * MINIMAL STYLES - For Webflow environment
+ * 
+ * This is an exact copy of NBA's injectMinimalStyles() with TWO additions:
+ *   1. .tabulator-header blue gradient + color (NBA gets orange from Webflow; NHL has no Webflow color)
+ *   2. .tabulator-col sort arrow colors (white, for visibility on blue)
+ * 
+ * Everything else (rows, cells, padding, fonts, alternating colors, borders)
+ * is provided by Webflow and MUST NOT be overridden here.
+ */
 function injectMinimalStyles() {
     const style = document.createElement('style');
     style.setAttribute('data-source', 'github-nhl-minimal');
     style.textContent = `
-        /* ===================================================
-           NHL MINIMAL STYLES - For Webflow environment
-           MUST include full header theming because Webflow
-           does not have a custom NHL color stylesheet
-           =================================================== */
+        /* GitHub NHL table-specific settings only */
         
-        /* Force visibility */
+        /* CRITICAL FIX: Force visibility */
         .table-wrapper {
             display: block !important;
             visibility: visible !important;
             opacity: 1 !important;
         }
+        
         .tabulator {
             display: block !important;
             visibility: visible !important;
@@ -105,6 +120,7 @@ function injectMinimalStyles() {
             width: 100% !important;
             background: #e8e8e8 !important;
         }
+        
         .table-container {
             display: block !important;
             visibility: visible !important;
@@ -112,31 +128,19 @@ function injectMinimalStyles() {
         }
         
         /* ===================================================
-           HEADER THEMING - Blue gradient for ALL headers
-           This is critical because unlike NBA, Webflow doesn't
-           provide a custom NHL header color stylesheet
+           NHL-SPECIFIC: Blue header gradient + white text
+           This is the ONLY section not in NBA minimal styles.
+           Webflow provides orange headers for NBA but has no
+           NHL-specific color, so we must set it here.
            =================================================== */
         .tabulator-header {
             background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
             color: white !important;
-            font-weight: 600 !important;
         }
         .tabulator-col {
             background: transparent !important;
             border-right: 1px solid rgba(255,255,255,0.2) !important;
         }
-        .tabulator-col-title {
-            white-space: normal !important;
-            word-break: break-word !important;
-            overflow-wrap: break-word !important;
-            text-align: center !important;
-            color: white !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            padding: 4px 2px !important;
-        }
-        /* Sort arrows - white */
         .tabulator-col .tabulator-col-sorter .tabulator-arrow {
             border-bottom-color: rgba(255,255,255,0.6) !important;
         }
@@ -146,55 +150,25 @@ function injectMinimalStyles() {
         .tabulator-col[aria-sort="descending"] .tabulator-col-sorter .tabulator-arrow {
             border-top-color: white !important;
         }
-        /* Header filter inputs */
-        .tabulator-header-filter {
-            margin-top: 3px !important;
-        }
-        .tabulator-header-filter input {
-            background: rgba(255,255,255,0.95) !important;
-            border: 1px solid rgba(255,255,255,0.3) !important;
-            border-radius: 3px !important;
-            padding: 3px 5px !important;
-            font-size: 11px !important;
-            color: #333 !important;
-        }
-        .tabulator-header-filter input:focus {
-            background: white !important;
-            border-color: #60a5fa !important;
-            box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.3) !important;
+        /* END NHL-SPECIFIC ADDITIONS */
+        
+        /* HEADERS: Allow word wrapping, center-justified */
+        .tabulator-col-title {
+            white-space: normal !important;
+            word-break: break-word !important;
+            overflow-wrap: break-word !important;
+            text-align: center !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
         }
         
-        /* Row styles */
-        .tabulator-row {
-            background-color: white !important;
-            border-bottom: 1px solid #f0f0f0 !important;
-        }
-        .tabulator-row:nth-child(even) {
-            background-color: #fafafa !important;
-        }
-        .tabulator-row:hover {
-            background-color: #eff6ff !important;
-        }
-        
-        /* Cell styles */
+        /* DATA CELLS: Single-line with ellipsis */
+        /* NOTE: Do NOT add padding or border rules here - Webflow provides those */
         .tabulator-cell {
-            padding: 4px 8px !important;
-            border-right: 1px solid #f0f0f0 !important;
             white-space: nowrap !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
-        }
-        
-        /* Custom multiselect button */
-        .custom-multiselect-button {
-            background: rgba(255,255,255,0.95) !important;
-            color: #333 !important;
-            font-size: 11px !important;
-            border: 1px solid rgba(255,255,255,0.3) !important;
-            border-radius: 3px !important;
-        }
-        .custom-multiselect-button:hover {
-            border-color: #1e40af !important;
         }
         
         /* DROPDOWNS: Position ABOVE the table */
@@ -208,9 +182,7 @@ function injectMinimalStyles() {
             box-shadow: 0 -4px 12px rgba(0,0,0,0.15) !important;
         }
         
-        /* ===================================================
-           Min/Max filter stacking
-           =================================================== */
+        /* Min/Max filter stacking */
         .min-max-filter-container,
         .tabulator .min-max-filter-container,
         .tabulator-header .min-max-filter-container,
@@ -249,25 +221,25 @@ function injectMinimalStyles() {
         
         /* ===================================================
            FROZEN COLUMN STYLES
-           Header: same blue gradient as all other headers
-           Data cells: white/fafafa background (NOT blue)
-           Freeze line: 2px solid blue border
+           Header: blue gradient (matches header above)
+           Data cells: inherit from Webflow (do NOT set explicit colors)
+           Border: 2px for visibility
            =================================================== */
         .tabulator-frozen {
             z-index: 11 !important;
         }
         .tabulator-frozen.tabulator-frozen-left {
-            border-right: 2px solid rgba(30, 64, 175, 0.5) !important;
+            border-right: 2px solid rgba(30, 64, 175, 0.4) !important;
             box-shadow: 2px 0 4px rgba(0,0,0,0.08) !important;
         }
-        /* Frozen header - same gradient as all headers */
+        /* Frozen header - blue gradient */
         .tabulator-header .tabulator-frozen {
             background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
             z-index: 100 !important;
         }
-        /* Frozen DATA cells - white backgrounds, NOT blue */
+        /* Frozen data cells - inherit from Webflow, do NOT set explicit white */
         .tabulator-row .tabulator-frozen {
-            background: white !important;
+            background: inherit !important;
         }
         .tabulator-row:nth-child(even) .tabulator-frozen {
             background: #fafafa !important;
@@ -277,7 +249,8 @@ function injectMinimalStyles() {
         }
         
         /* ===================================================
-           Standalone header vertical alignment (mobile)
+           Standalone header vertical alignment (mobile/tablet)
+           Exact copy of NBA version
            =================================================== */
         @media screen and (max-width: 1024px) {
             .tabulator-header {
@@ -303,10 +276,20 @@ function injectMinimalStyles() {
                 height: 100% !important;
                 padding-top: 6px !important;
             }
+            .tabulator-col.standalone-header .tabulator-col-title-holder {
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: flex-start !important;
+                flex-grow: 0 !important;
+            }
+            .tabulator-col.standalone-header .tabulator-header-filter {
+                margin-top: auto !important;
+            }
             .tabulator-col:not(.tabulator-col-group) .tabulator-col-title {
                 text-align: center !important;
                 padding-top: 4px !important;
             }
+            /* Frozen header on mobile must be opaque */
             .tabulator-header .tabulator-frozen {
                 background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
                 z-index: 100 !important;
@@ -323,29 +306,29 @@ function injectMinimalStyles() {
         }
         
         /* ===================================================
-           DESKTOP: Grey background + scrollbar + full width
+           DESKTOP: Grey background fills empty space
+           Exact copy of NBA version
            =================================================== */
         @media screen and (min-width: 1025px) {
             .table-container {
                 background: #e8e8e8 !important;
-                width: 100% !important;
             }
             .table-wrapper {
                 background: #e8e8e8 !important;
             }
             .tabulator {
-                background: #e8e8e8 !important;
-                width: 100% !important;
+                background-color: #e8e8e8 !important;
             }
             .tabulator .tabulator-tableholder {
-                background: #e8e8e8 !important;
+                background-color: #e8e8e8 !important;
                 overflow-y: scroll !important;
                 overflow-x: auto !important;
             }
         }
         
         /* ===================================================
-           MOBILE: Frozen column + container constraints
+           MOBILE: Frozen column fix
+           Exact copy of NBA version with blue hover color
            =================================================== */
         @media screen and (max-width: 1024px) {
             .table-container {
@@ -385,9 +368,13 @@ function injectMinimalStyles() {
         }
     `;
     document.head.appendChild(style);
-    console.log('NHL minimal styles injected with full header theming');
+    console.log('NHL minimal styles injected (NBA-identical + blue header only)');
 }
 
+/**
+ * FULL STYLES - For non-Webflow environments (standalone testing)
+ * Complete styling since Webflow isn't providing base formatting
+ */
 function injectFullStyles() {
     const mobile = isMobile();
     const tablet = isTablet();
@@ -397,7 +384,6 @@ function injectFullStyles() {
     style.setAttribute('data-source', 'github-nhl-full');
     style.setAttribute('data-table-styles', 'github');
     style.textContent = `
-        /* GLOBAL FONT SIZE */
         .tabulator, .tabulator *, .tabulator-table, .tabulator-table *,
         .tabulator-header, .tabulator-header *, .tabulator-row, .tabulator-row *,
         .tabulator-cell, .tabulator-cell * {
@@ -466,27 +452,21 @@ function injectFullStyles() {
             text-overflow: ellipsis; border-radius: 3px;
         }
         .custom-multiselect-button:hover { border-color: #1e40af; }
-        .custom-multiselect-button:focus {
-            outline: none; border-color: #1e40af;
-            box-shadow: 0 0 0 2px rgba(30, 64, 175, 0.2);
-        }
-        /* Frozen columns */
         .tabulator-frozen {
             position: sticky !important; left: 0 !important;
             z-index: 10 !important; background: white !important;
         }
         .tabulator-frozen.tabulator-frozen-left {
-            border-right: 2px solid rgba(30, 64, 175, 0.5) !important;
+            border-right: 2px solid rgba(30, 64, 175, 0.4) !important;
             box-shadow: 2px 0 4px rgba(0,0,0,0.08) !important;
         }
         .tabulator-header .tabulator-frozen {
             background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
             z-index: 100 !important;
         }
-        .tabulator-row .tabulator-frozen { background: white !important; }
+        .tabulator-row .tabulator-frozen { background: inherit !important; }
         .tabulator-row:nth-child(even) .tabulator-frozen { background: #fafafa !important; }
         .tabulator-row:hover .tabulator-frozen { background: #eff6ff !important; }
-        /* Min/Max filters */
         .min-max-filter-container, .tabulator .min-max-filter-container,
         .tabulator-header .min-max-filter-container,
         .tabulator-header-filter .min-max-filter-container {
@@ -515,7 +495,6 @@ function injectFullStyles() {
             border-radius: 4px !important;
             box-shadow: 0 -4px 12px rgba(0,0,0,0.15) !important;
         }
-        /* Standalone header alignment (mobile) */
         @media screen and (max-width: 1024px) {
             .tabulator-header { display: flex !important; align-items: stretch !important; }
             .tabulator-headers { display: flex !important; align-items: stretch !important; }
@@ -537,7 +516,6 @@ function injectFullStyles() {
         .tabulator .tabulator-tableholder {
             overflow-y: auto !important; overflow-x: auto !important;
         }
-        /* Mobile frozen column fix */
         @media screen and (max-width: 1024px) {
             .table-container {
                 width: 100% !important; max-width: 100vw !important;
@@ -561,7 +539,6 @@ function injectFullStyles() {
                 position: sticky !important; left: 0 !important; z-index: 101 !important;
             }
         }
-        /* Desktop scrollbar */
         @media screen and (min-width: 1025px) {
             .tabulator .tabulator-tableholder::-webkit-scrollbar {
                 display: block !important; width: 16px !important; height: 16px !important;
