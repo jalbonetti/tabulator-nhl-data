@@ -2,6 +2,13 @@
 // Team abbreviation maps for matchup display on mobile/tablet
 // EV% and Kelly% values multiplied by 100 before display
 // Full width management: scanDataForMaxWidths, equalizeClusteredColumns, calculateAndApplyWidths
+//
+// FIXES APPLIED:
+// - Added calculateAndApplyWidths() with container fit-content logic (was missing)
+// - Added renderComplete handler for proper width on tab switch
+// - Added forceRecalculateWidths() for TabManager tab switch support
+// - Added debounce() helper and resize event listener
+// - These match the NBA basketGameOdds.js pattern exactly
 
 import { BaseTable } from './baseTable.js';
 import { createCustomMultiSelect } from '../components/customMultiSelect.js';
@@ -112,6 +119,16 @@ export class NHLGameOddsTable extends BaseTable {
             }, 250));
         });
         
+        // FIX: Added renderComplete handler (matches NBA pattern)
+        // Recalculates widths after render to handle tab switching properly
+        this.table.on("renderComplete", () => {
+            if (!isMobile() && !isTablet()) {
+                setTimeout(() => {
+                    this.calculateAndApplyWidths();
+                }, 100);
+            }
+        });
+        
         this.table.on("dataLoaded", () => {
             setTimeout(() => {
                 const data = this.table ? this.table.getData() : [];
@@ -124,6 +141,92 @@ export class NHLGameOddsTable extends BaseTable {
                 }
             }, 200);
         });
+    }
+
+    // Debounce helper
+    debounce(func, wait) {
+        let timeout;
+        return (...args) => {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), wait);
+        };
+    }
+
+    // FIX: Added forceRecalculateWidths - called by TabManager on tab switch
+    forceRecalculateWidths() {
+        if (!this.table) return;
+        console.log('NHL Game Odds forceRecalculateWidths called');
+        
+        const data = this.table.getData() || [];
+        if (data.length > 0) {
+            this.scanDataForMaxWidths(data);
+            if (!isMobile() && !isTablet()) {
+                this.equalizeClusteredColumns();
+                this.calculateAndApplyWidths();
+            }
+        }
+    }
+
+    // Backward compatibility alias for main.js resize handler
+    expandNameColumnToFill() {
+        this.calculateAndApplyWidths();
+    }
+
+    // FIX: Added calculateAndApplyWidths (matches NBA basketGameOdds.js pattern)
+    // Desktop: constrains table to content width + scrollbar, container to fit-content
+    // This prevents the table from stretching to full window width
+    // Grey background in .table-wrapper fills remaining space
+    calculateAndApplyWidths() {
+        if (!this.table) return;
+        
+        // Skip on mobile/tablet
+        if (isMobile() || isTablet()) return;
+        
+        try {
+            const columns = this.table.getColumns();
+            let totalColumnWidth = 0;
+            
+            columns.forEach(col => {
+                if (col.isVisible()) {
+                    totalColumnWidth += col.getWidth();
+                }
+            });
+            
+            const tableElement = this.table.element;
+            const tableHolder = tableElement.querySelector('.tabulator-tableholder');
+            
+            // Add scrollbar width buffer for desktop
+            const SCROLLBAR_WIDTH = 17;
+            const totalWidthWithScrollbar = totalColumnWidth + SCROLLBAR_WIDTH;
+            
+            // Constrain tabulator element to exact content width
+            tableElement.style.width = totalWidthWithScrollbar + 'px';
+            tableElement.style.minWidth = totalWidthWithScrollbar + 'px';
+            tableElement.style.maxWidth = totalWidthWithScrollbar + 'px';
+            
+            if (tableHolder) {
+                tableHolder.style.width = totalWidthWithScrollbar + 'px';
+                tableHolder.style.maxWidth = totalWidthWithScrollbar + 'px';
+            }
+            
+            const tabulatorHeader = tableElement.querySelector('.tabulator-header');
+            if (tabulatorHeader) {
+                tabulatorHeader.style.width = totalWidthWithScrollbar + 'px';
+            }
+            
+            // CRITICAL: Set container to fit-content so grey fills remaining space
+            const tableContainer = tableElement.closest('.table-container');
+            if (tableContainer) {
+                tableContainer.style.width = 'fit-content';
+                tableContainer.style.minWidth = 'auto';
+                tableContainer.style.maxWidth = 'none';
+            }
+            
+            console.log(`NHL Game Odds: Set table width to ${totalWidthWithScrollbar}px (columns: ${totalColumnWidth}px + scrollbar: ${SCROLLBAR_WIDTH}px)`);
+            
+        } catch (error) {
+            console.error('Error in NHL Game Odds calculateAndApplyWidths:', error);
+        }
     }
 
     // Scan ALL data to find max widths needed for text columns
