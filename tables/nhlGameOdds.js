@@ -78,7 +78,29 @@ export class NHLGameOddsTable extends BaseTable {
         return abbreviated;
     }
 
+    _injectHeaderNoWrapStyles() {
+        const styleId = 'nhl-header-nowrap';
+        if (document.querySelector(`#${styleId}`)) return;
+        
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+            /* Force ALL column header titles to single line — overrides
+               tableStyles.js white-space:normal and word-break:break-word */
+            .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title {
+                white-space: nowrap !important;
+                word-break: normal !important;
+                overflow-wrap: normal !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+            }
+        `;
+        document.head.appendChild(style);
+        console.log('NHL: Injected header no-wrap styles');
+    }
+
     initialize() {
+        this._injectHeaderNoWrapStyles();
         const isSmallScreen = isMobile() || isTablet();
         const baseConfig = this.getBaseConfig();
         
