@@ -149,15 +149,16 @@ export class TabManager {
                 tabulator.style.maxWidth = '100%';
             }
         } else {
-            // Desktop: full width so tables fill the page (matches NBA behavior)
-            tableContainer.style.width = '100%';
-            tableContainer.style.maxWidth = '100%';
+            // Desktop: fit-content so table is only as wide as needed
+            // Grey fills remaining space via .table-wrapper background
+            tableContainer.style.width = 'fit-content';
+            tableContainer.style.maxWidth = 'none';
             tableContainer.style.overflowX = '';
             
             if (tabulator) {
-                tabulator.style.width = '100%';
+                tabulator.style.width = '';
                 tabulator.style.minWidth = '';
-                tabulator.style.maxWidth = '100%';
+                tabulator.style.maxWidth = '';
             }
         }
     }
