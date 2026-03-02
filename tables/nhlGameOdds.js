@@ -438,7 +438,7 @@ export class NHLGameOddsTable extends BaseTable {
                 resizable: false, hozAlign: "center"
             },
             {
-                title: "Line", field: "Game Line", widthGrow: 0, minWidth: 50,
+                title: "Line", field: "Game Line", widthGrow: 0, minWidth: 55,
                 sorter: "number",
                 headerFilter: createMinMaxFilter, headerFilterFunc: minMaxFilterFunction,
                 headerFilterLiveFilter: false, resizable: false, hozAlign: "center"
