@@ -114,6 +114,7 @@ export class NHLGameOddsTable extends BaseTable {
                 const data = this.table ? this.table.getData() : [];
                 if (data.length > 0) {
                     this.scanDataForMaxWidths(data);
+                    // Desktop-only: equalize clusters and set container width
                     if (!isMobile() && !isTablet()) {
                         this.equalizeClusteredColumns();
                         this.calculateAndApplyWidths();
@@ -249,7 +250,10 @@ export class NHLGameOddsTable extends BaseTable {
         
         // Skip on mobile/tablet — let Tabulator's fitData handle sizing naturally
         // (matches NBA basketGameOdds.js pattern)
-        if (isMobile() || isTablet()) return;
+        if (isMobile() || isTablet()) {
+            console.log('NHL Game Odds: Skipping width scan on mobile/tablet (using native fitData)');
+            return;
+        }
         
         console.log(`NHL Game Odds Scanning ${data.length} rows for max column widths...`);
         
