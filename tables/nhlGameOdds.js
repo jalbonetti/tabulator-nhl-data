@@ -4,8 +4,14 @@
 //
 // WIDTH MANAGEMENT (matches NBA exactly):
 // - scanDataForMaxWidths: SKIPS entirely on mobile/tablet. Desktop scans all.
-// - calculateAndApplyWidths: mobile/tablet CLEARS all container widths. Desktop sets pixel widths.
+// - calculateAndApplyWidths: mobile/tablet sets explicit pixel widths so tabulator
+//   can overflow the container (container scrolls horizontally). Desktop sets pixel widths.
 // - forceRecalculateWidths: ALWAYS calls both scan + calculateAndApply (no mobile guard).
+//
+// MOBILE FIX: Previously, calculateAndApplyWidths on mobile just cleared all widths,
+// letting CSS `max-width: 100% !important` from tableStyles.js crush all columns into
+// the viewport width. Now we inject container-specific CSS overrides (matching
+// nhlMatchups.js pattern) and set explicit pixel widths on mobile.
 
 import { BaseTable } from './baseTable.js';
 import { createCustomMultiSelect } from '../components/customMultiSelect.js';
@@ -18,6 +24,7 @@ const EV_KELLY_COLUMN_MIN_WIDTH = 65;
 export class NHLGameOddsTable extends BaseTable {
     constructor(elementId) {
         super(elementId, 'HockeyGameOdds');
+        this._stylesInjected = false;
         
         this.teamAbbrevMap = {
             'Anaheim Ducks': 'ANA', 'Boston Bruins': 'BOS', 'Buffalo Sabres': 'BUF',
@@ -36,6 +43,68 @@ export class NHLGameOddsTable extends BaseTable {
         };
     }
 
+    // =========================================================================
+    // MOBILE FIX: Inject container-specific CSS overrides for #table2-container
+    // This mirrors what nhlMatchups.js does for #table0-container.
+    // =========================================================================
+    _injectGameOddsStyles() {
+        if (this._stylesInjected) return;
+        const styleId = 'nhl-game-odds-width-override';
+        if (document.querySelector(`#${styleId}`)) { this._stylesInjected = true; return; }
+        
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+            /* =====================================================
+               DESKTOP (>1024px): Override blanket rules so JS can
+               set tight pixel widths. Container wraps to content.
+               ===================================================== */
+            @media screen and (min-width: 1025px) {
+                #table2-container {
+                    width: fit-content !important;
+                    max-width: none !important;
+                    overflow-x: visible !important;
+                }
+                
+                #table2-container .tabulator {
+                    width: auto !important;
+                    max-width: none !important;
+                }
+                
+                #table2-container .tabulator .tabulator-tableholder {
+                    overflow-y: auto !important;
+                }
+            }
+            
+            /* =====================================================
+               MOBILE/TABLET (<=1024px): 
+               - Container: capped to viewport, scrolls horizontally
+               - Tabulator: must NOT be constrained to container width.
+               ===================================================== */
+            @media screen and (max-width: 1024px) {
+                #table2-container {
+                    max-width: 100vw !important;
+                    overflow-x: auto !important;
+                    overflow-y: visible !important;
+                    -webkit-overflow-scrolling: touch !important;
+                }
+                
+                #table2-container .tabulator {
+                    max-width: none !important;
+                    min-width: 0 !important;
+                }
+                
+                #table2-container .tabulator .tabulator-tableholder {
+                    overflow-x: visible !important;
+                    overflow-y: auto !important;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+        this._stylesInjected = true;
+        console.log('NHL Game Odds: Injected width override styles');
+    }
+
     abbreviateMatchup(matchup) {
         if (!matchup) return '-';
         let abbreviated = matchup;
@@ -47,6 +116,9 @@ export class NHLGameOddsTable extends BaseTable {
     }
 
     initialize() {
+        // Inject container-specific CSS overrides BEFORE building the table
+        this._injectGameOddsStyles();
+        
         const mobile = isMobile();
         const tablet = isTablet();
         const isSmallScreen = mobile || tablet;
@@ -90,8 +162,8 @@ export class NHLGameOddsTable extends BaseTable {
                     this.scanDataForMaxWidths(data);
                     if (!isMobile() && !isTablet()) {
                         this.equalizeClusteredColumns();
-                        this.calculateAndApplyWidths();
                     }
+                    this.calculateAndApplyWidths();
                 }
             }, 100);
         });
@@ -103,20 +175,18 @@ export class NHLGameOddsTable extends BaseTable {
                     this.scanDataForMaxWidths(data);
                     if (!isMobile() && !isTablet()) {
                         this.equalizeClusteredColumns();
-                        this.calculateAndApplyWidths();
                     }
+                    this.calculateAndApplyWidths();
                 }
             }, 100);
         });
         
         this.table.on("renderComplete", () => {
-            if (!isMobile() && !isTablet()) {
-                setTimeout(() => this.calculateAndApplyWidths(), 100);
-            }
+            setTimeout(() => this.calculateAndApplyWidths(), 100);
         });
         
         window.addEventListener('resize', this.debounce(() => {
-            if (this.table && this.table.getDataCount() > 0 && !isMobile() && !isTablet()) {
+            if (this.table && this.table.getDataCount() > 0) {
                 this.calculateAndApplyWidths();
             }
         }, 250));
@@ -129,7 +199,7 @@ export class NHLGameOddsTable extends BaseTable {
 
     // Called by TabManager on tab switch.
     // CRITICAL: No mobile guard — ALWAYS calls calculateAndApplyWidths.
-    // On mobile, calculateAndApplyWidths clears any desktop widths.
+    // On mobile, calculateAndApplyWidths now sets explicit pixel widths.
     forceRecalculateWidths() {
         if (!this.table) return;
         console.log('NHL Game Odds forceRecalculateWidths called');
@@ -141,7 +211,7 @@ export class NHLGameOddsTable extends BaseTable {
                 this.equalizeClusteredColumns();
             }
         }
-        // ALWAYS call - mobile path clears widths, desktop path sets them
+        // ALWAYS call - mobile path sets explicit widths, desktop path sets them too
         this.calculateAndApplyWidths();
     }
 
@@ -149,8 +219,11 @@ export class NHLGameOddsTable extends BaseTable {
         this.calculateAndApplyWidths();
     }
 
-    // MATCHES NBA: On mobile/tablet, CLEARS all container widths.
-    // On desktop, sets precise pixel widths.
+    // =========================================================================
+    // FIXED: On mobile/tablet, instead of just clearing widths, we now set
+    // explicit pixel widths matching the nhlMatchups.js pattern.
+    // On desktop, sets precise pixel widths (unchanged).
+    // =========================================================================
     calculateAndApplyWidths() {
         if (!this.table) return;
         
@@ -161,55 +234,52 @@ export class NHLGameOddsTable extends BaseTable {
         const tablet = isTablet();
         const isSmallScreen = mobile || tablet;
         
-        // MOBILE/TABLET: Clear container widths (matches NBA exactly)
-        if (isSmallScreen) {
-            tableElement.style.width = '';
-            tableElement.style.minWidth = '';
-            tableElement.style.maxWidth = '';
-            
-            const tableContainer = tableElement.closest('.table-container');
-            if (tableContainer) {
-                tableContainer.style.width = '';
-                tableContainer.style.minWidth = '';
-                tableContainer.style.maxWidth = '';
-            }
-            
-            console.log(`NHL Game Odds Mobile/tablet: container widths cleared`);
-            return;
-        }
-        
-        // DESKTOP: Set explicit widths (matches NBA exactly)
         try {
             const columns = this.table.getColumns();
             let totalColumnWidth = 0;
             columns.forEach(col => { if (col.isVisible()) totalColumnWidth += col.getWidth(); });
             
             const tableHolder = tableElement.querySelector('.tabulator-tableholder');
-            const SCROLLBAR_WIDTH = 17;
-            const totalWidthWithScrollbar = totalColumnWidth + SCROLLBAR_WIDTH;
+            const SCROLLBAR_WIDTH = isSmallScreen ? 0 : 17;
+            const totalWidth = totalColumnWidth + SCROLLBAR_WIDTH;
             
-            tableElement.style.width = totalWidthWithScrollbar + 'px';
-            tableElement.style.minWidth = totalWidthWithScrollbar + 'px';
-            tableElement.style.maxWidth = totalWidthWithScrollbar + 'px';
+            // Set tabulator to exact content width
+            tableElement.style.width = totalWidth + 'px';
+            tableElement.style.minWidth = totalWidth + 'px';
+            tableElement.style.maxWidth = totalWidth + 'px';
             
-            if (tableHolder) {
-                tableHolder.style.width = totalWidthWithScrollbar + 'px';
-                tableHolder.style.maxWidth = totalWidthWithScrollbar + 'px';
+            if (tableHolder) { 
+                tableHolder.style.width = totalWidth + 'px'; 
+                tableHolder.style.maxWidth = totalWidth + 'px'; 
             }
             
-            const tabulatorHeader = tableElement.querySelector('.tabulator-header');
-            if (tabulatorHeader) {
-                tabulatorHeader.style.width = totalWidthWithScrollbar + 'px';
+            const header = tableElement.querySelector('.tabulator-header');
+            if (header) header.style.width = totalWidth + 'px';
+            
+            // On mobile: override TabManager's inline styles on the container
+            if (isSmallScreen) {
+                const tc = tableElement.closest('.table-container');
+                if (tc) {
+                    tc.style.width = '';
+                    tc.style.minWidth = '';
+                    tc.style.overflowX = '';
+                }
+                
+                // Use !important to override any remaining CSS constraints
+                tableElement.style.setProperty('width', totalWidth + 'px', 'important');
+                tableElement.style.setProperty('min-width', totalWidth + 'px', 'important');
+                tableElement.style.setProperty('max-width', totalWidth + 'px', 'important');
+            } else {
+                // Desktop: set container to fit-content
+                const tableContainer = tableElement.closest('.table-container');
+                if (tableContainer) {
+                    tableContainer.style.width = 'fit-content';
+                    tableContainer.style.minWidth = 'auto';
+                    tableContainer.style.maxWidth = 'none';
+                }
             }
             
-            const tableContainer = tableElement.closest('.table-container');
-            if (tableContainer) {
-                tableContainer.style.width = 'fit-content';
-                tableContainer.style.minWidth = 'auto';
-                tableContainer.style.maxWidth = 'none';
-            }
-            
-            console.log(`NHL Game Odds: Set table width to ${totalWidthWithScrollbar}px (columns: ${totalColumnWidth}px + scrollbar: ${SCROLLBAR_WIDTH}px)`);
+            console.log(`NHL Game Odds: Set width to ${totalWidth}px (columns: ${totalColumnWidth}px + scrollbar: ${SCROLLBAR_WIDTH}px, device: ${isSmallScreen ? 'mobile' : 'desktop'})`);
         } catch (error) {
             console.error('Error in NHL Game Odds calculateAndApplyWidths:', error);
         }
@@ -253,22 +323,17 @@ export class NHLGameOddsTable extends BaseTable {
                             displayValue = pctDisplay.length > moneyDisplay.length ? pctDisplay : moneyDisplay;
                         }
                     }
+                    if (field === 'Game Matchup') displayValue = this.abbreviateMatchup(value);
                     if (field === 'Link') displayValue = 'Bet';
+                    
                     const textWidth = ctx.measureText(displayValue).width;
                     if (textWidth > maxWidths[field]) maxWidths[field] = textWidth;
                 }
             });
         });
         
-        const longestMatchup = "Vegas Golden Knights @ Tampa Bay Lightning";
-        const longestMatchupWidth = ctx.measureText(longestMatchup).width;
-        if (longestMatchupWidth > maxWidths["Game Matchup"]) {
-            maxWidths["Game Matchup"] = longestMatchupWidth;
-            console.log(`NHL Game Odds: min matchup width for "${longestMatchup}": ${Math.ceil(longestMatchupWidth)}px`);
-        }
-        
         const CELL_PADDING = 16;
-        const BUFFER = 10;
+        const BUFFER = 8;
         
         Object.keys(maxWidths).forEach(field => {
             if (maxWidths[field] > 0) {
@@ -278,7 +343,7 @@ export class NHLGameOddsTable extends BaseTable {
                     const currentWidth = column.getWidth();
                     if (requiredWidth > currentWidth) {
                         column.setWidth(Math.ceil(requiredWidth));
-                        console.log(`NHL Game Odds Expanded ${field} from ${currentWidth}px to ${Math.ceil(requiredWidth)}px`);
+                        console.log(`NHL Game Odds Set ${field} to ${Math.ceil(requiredWidth)}px (was ${currentWidth}px)`);
                     }
                 }
             }
@@ -345,13 +410,6 @@ export class NHLGameOddsTable extends BaseTable {
 
     getColumns(isSmallScreen = false) {
         const self = this;
-        
-        const matchupFormatter = (cell) => {
-            const value = cell.getValue();
-            if (!value) return '-';
-            if (isMobile() || isTablet()) return self.abbreviateMatchup(value);
-            return value;
-        };
 
         const oddsFormatter = (cell) => {
             const value = cell.getValue();
@@ -395,6 +453,11 @@ export class NHLGameOddsTable extends BaseTable {
             link.textContent = 'Bet';
             link.style.cssText = 'color: #2563eb; text-decoration: underline; font-weight: 500;';
             return link;
+        };
+
+        const matchupFormatter = (cell) => {
+            const value = cell.getValue();
+            return value ? self.abbreviateMatchup(value) : '-';
         };
 
         return [
