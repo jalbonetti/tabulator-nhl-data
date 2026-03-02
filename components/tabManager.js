@@ -2,6 +2,14 @@
 // DIRECT COPY of NBA basketball tabManager.js with color changes:
 //   #f97316 -> #1e40af, #ea580c -> #1e3a8a
 // Includes applyContainerWidth and proper mobile/desktop width handling
+//
+// FIXES APPLIED:
+// - applyContainerWidth desktop branch no longer clears tabulator element widths.
+//   calculateAndApplyWidths() is the sole controller of tabulator pixel widths.
+//   Clearing them caused a layout gap where Tabulator re-flowed at 100% width.
+// - Tab switch sequence now matches NBA: applyContainerWidth FIRST (sets container
+//   to fit-content), then forceRecalculateWidths AFTER (does full scan + equalize +
+//   calculateAndApply). Previously was backwards: calculate first, then clear.
 
 export const TAB_STYLES = `
     .table-wrapper {
@@ -129,7 +137,8 @@ export class TabManager {
     /**
      * Apply appropriate container and tabulator width based on screen size
      * Mobile/tablet: Constrain both container AND tabulator to enable frozen columns
-     * Desktop: 100% width so tables fill the page
+     * Desktop: Set container to fit-content. Do NOT touch tabulator element widths —
+     *          calculateAndApplyWidths() is the sole controller of those.
      */
     applyContainerWidth(tableContainer) {
         if (!tableContainer) return;
@@ -155,11 +164,11 @@ export class TabManager {
             tableContainer.style.maxWidth = 'none';
             tableContainer.style.overflowX = '';
             
-            if (tabulator) {
-                tabulator.style.width = '';
-                tabulator.style.minWidth = '';
-                tabulator.style.maxWidth = '';
-            }
+            // FIXED: Do NOT clear tabulator element widths here.
+            // calculateAndApplyWidths() sets precise pixel widths on the tabulator
+            // element (width, minWidth, maxWidth). Clearing them here creates a gap
+            // where Tabulator re-flows at 100% width, fires renderComplete, and
+            // calculateAndApplyWidths locks in wrong (minWidth-based) dimensions.
         }
     }
 
@@ -233,20 +242,34 @@ export class TabManager {
                         targetTableWrapper.table.redraw(true);
                         self.restoreTabState(targetTab);
                         
-                        // Re-equalize columns and recalculate widths after tab switch
+                        // FIXED: Match NBA pattern — applyContainerWidth FIRST,
+                        // then forceRecalculateWidths AFTER to set proper pixel widths.
+                        // Previous version called calculateAndApplyWidths first, then
+                        // applyContainerWidth cleared those widths.
                         setTimeout(() => {
+                            // Desktop-specific: equalize clustered columns
                             if (window.innerWidth > 1024) {
                                 if (targetTableWrapper.equalizeClusteredColumns) {
                                     targetTableWrapper.equalizeClusteredColumns();
                                 }
-                                if (targetTableWrapper.calculateAndApplyWidths) {
-                                    targetTableWrapper.calculateAndApplyWidths();
-                                }
                             }
                             
+                            // Apply container width defaults first
                             const tableContainer = targetTableWrapper.table?.element?.closest('.table-container');
                             requestAnimationFrame(() => {
                                 self.applyContainerWidth(tableContainer);
+                                
+                                // FIXED: After applyContainerWidth sets its defaults (100% on mobile,
+                                // fit-content on desktop), let the table override with its own calculated
+                                // widths. This is critical for narrow tables like Matchups that need to
+                                // constrain their container to column widths rather than filling viewport.
+                                requestAnimationFrame(() => {
+                                    if (targetTableWrapper.forceRecalculateWidths) {
+                                        targetTableWrapper.forceRecalculateWidths();
+                                    } else if (targetTableWrapper.calculateAndApplyWidths) {
+                                        targetTableWrapper.calculateAndApplyWidths();
+                                    }
+                                });
                             });
                         }, 100);
                     }
@@ -274,9 +297,19 @@ export class TabManager {
                         tableWrapper.initialize();
                         this.tabInitialized[tabId] = true;
                         
+                        // After initialization, apply container width then let table recalculate
                         setTimeout(() => {
                             const tableContainer = tableWrapper.table?.element?.closest('.table-container');
                             self.applyContainerWidth(tableContainer);
+                            
+                            // Let the table override with its own widths after applyContainerWidth
+                            requestAnimationFrame(() => {
+                                if (tableWrapper.forceRecalculateWidths) {
+                                    tableWrapper.forceRecalculateWidths();
+                                } else if (tableWrapper.calculateAndApplyWidths) {
+                                    tableWrapper.calculateAndApplyWidths();
+                                }
+                            });
                         }, 200);
                         
                     } catch (error) {
