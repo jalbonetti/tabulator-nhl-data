@@ -111,7 +111,8 @@ function injectMinimalStyles() {
             background: #e8e8e8 !important;
         }
         
-        /* Headers: word wrap + center (no colors - Webflow provides those) */
+        /* Headers: word wrap + center + bold dark text */
+        /* Webflow provides bold headers for NBA; NHL needs it explicitly */
         .tabulator-col-title {
             white-space: normal !important;
             word-break: break-word !important;
@@ -120,6 +121,8 @@ function injectMinimalStyles() {
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
+            font-weight: 600 !important;
+            color: #333 !important;
         }
         
         /* Data cells: single-line with ellipsis (no padding/border - Webflow provides those) */
@@ -177,28 +180,27 @@ function injectMinimalStyles() {
             box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1) !important;
         }
         
-        /* Frozen column: z-index + border only. No background colors. */
+        /* Frozen column: z-index + visible border */
         .tabulator-frozen {
             z-index: 11 !important;
         }
         .tabulator-frozen.tabulator-frozen-left {
-            border-right: 2px solid #cbd5e1 !important;
-            box-shadow: 2px 0 4px rgba(0,0,0,0.08) !important;
+            border-right: 2px solid #999 !important;
+            box-shadow: 2px 0 4px rgba(0,0,0,0.1) !important;
         }
-        /* Frozen header: opaque so content doesn't scroll behind. 
-           Use Webflow's header color (inherit) with z-index */
+        /* Frozen header: opaque so content doesn't scroll behind */
         .tabulator-header .tabulator-frozen {
             z-index: 100 !important;
         }
-        /* Frozen data cells: match Webflow's alternating row colors */
+        /* Frozen data cells: explicit colors matching Webflow's alternating pattern */
         .tabulator-row .tabulator-frozen {
-            background: inherit !important;
+            background-color: white !important;
         }
         .tabulator-row:nth-child(even) .tabulator-frozen {
-            background: #fafafa !important;
+            background-color: #f5f5f5 !important;
         }
         .tabulator-row:hover .tabulator-frozen {
-            background: #fff7ed !important;
+            background-color: #fff7ed !important;
         }
         
         /* Standalone header alignment (mobile/tablet) */
@@ -286,19 +288,19 @@ function injectMinimalStyles() {
                 -webkit-overflow-scrolling: touch !important;
             }
             .tabulator-row .tabulator-cell.tabulator-frozen {
-                background: inherit !important;
+                background-color: white !important;
                 position: sticky !important;
                 left: 0 !important;
                 z-index: 10 !important;
             }
             .tabulator-row.tabulator-row-even .tabulator-cell.tabulator-frozen {
-                background: #fafafa !important;
+                background-color: #f5f5f5 !important;
             }
             .tabulator-row.tabulator-row-odd .tabulator-cell.tabulator-frozen {
-                background: #ffffff !important;
+                background-color: white !important;
             }
             .tabulator-row:hover .tabulator-cell.tabulator-frozen {
-                background: #fff7ed !important;
+                background-color: #fff7ed !important;
             }
             .tabulator-header .tabulator-col.tabulator-frozen {
                 position: sticky !important;
