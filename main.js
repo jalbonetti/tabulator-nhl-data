@@ -4,9 +4,9 @@
 // No expandable rows, no global expanded state
 // Mounts to: #nhl-table
 //
-// MOBILE FIX: Added injectMobileHeaderFix() after injectStyles().
-// Changes word-break from break-word to keep-all on mobile so headers
-// can wrap between words but never mid-word.
+// MOBILE FIX v4: white-space: nowrap on .tabulator-col-title only.
+// This forces Tabulator's fitData to expand each column to fit its
+// header text, since the header can't wrap to fit a narrow column.
 
 import { injectStyles } from './styles/tableStyles.js';
 import { NHLMatchupsTable } from './tables/nhlMatchups.js';
@@ -15,16 +15,23 @@ import { NHLGameOddsTable } from './tables/nhlGameOdds.js';
 import { TabManager } from './components/tabManager.js';
 
 /**
- * MOBILE HEADER FIX: Prevent mid-word header text breaking on mobile/tablet.
+ * MOBILE HEADER FIX v4
  * 
- * Problem: tableStyles.js sets .tabulator-col-title { white-space: normal; 
- * word-break: break-word; } which allows breaking WITHIN words on mobile.
- * With narrow columns, "Book" → "Boo k", "Team" → "Te am", etc.
+ * The problem: tableStyles.js sets white-space: normal + word-break: break-word
+ * on .tabulator-col-title. This lets headers wrap, so Tabulator's fitData thinks
+ * a column only needs to be 45px wide (it'll just wrap the header text). This
+ * causes both mid-word breaks AND clipping.
  * 
- * Fix: Change word-break to 'keep-all' which still allows wrapping between
- * words (e.g. "Median Odds" → "Median" / "Odds") but never mid-word.
- * This preserves Tabulator's column width synchronization while fixing
- * the visual issue.
+ * The fix: Set white-space: nowrap on ONLY .tabulator-col-title (the text element).
+ * Don't touch any parent/structural elements. This makes fitData measure the full
+ * unwrapped header width and expand the column accordingly.
+ * 
+ * The table will be wider than viewport → existing horizontal scroll handles it.
+ * 
+ * Previous attempts that failed:
+ * v1: white-space: nowrap with low specificity → overridden by tableStyles
+ * v2: min-width: max-content on .tabulator-col → broke header/data alignment
+ * v3: word-break: keep-all → allowed wrapping between words, columns still too narrow
  */
 function injectMobileHeaderFix() {
     if (document.querySelector('#nhl-mobile-header-fix')) return;
@@ -33,23 +40,26 @@ function injectMobileHeaderFix() {
     style.id = 'nhl-mobile-header-fix';
     style.textContent = `
         /* =============================================================
-           MOBILE HEADER FIX
-           Prevents mid-word header breaks on mobile/tablet.
-           word-break: keep-all allows "Median Odds" → "Median" / "Odds"
-           but prevents "Book" → "Boo" / "k"
+           MOBILE HEADER FIX v4
+           Force header TEXT to not wrap. Only targets the text element,
+           not structural column elements, so Tabulator's internal
+           header↔data column width sync stays intact.
+           
+           High specificity chain beats tableStyles.js rule:
+             .tabulator-col-title { white-space: normal !important }
            ============================================================= */
         @media screen and (max-width: 1024px) {
-            html body .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title,
-            html body div.tabulator div.tabulator-header div.tabulator-col div.tabulator-col-content div.tabulator-col-title {
-                word-break: keep-all !important;
+            html body .tabulator-col-title,
+            html body .tabulator .tabulator-col-title,
+            html body .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title {
+                white-space: nowrap !important;
+                word-break: normal !important;
                 overflow-wrap: normal !important;
-                hyphens: none !important;
-                -webkit-hyphens: none !important;
             }
         }
     `;
     document.head.appendChild(style);
-    console.log('NHL mobile header fix injected: word-break changed to keep-all on mobile');
+    console.log('NHL mobile header fix v4: white-space nowrap on col-title only');
 }
 
 document.addEventListener("DOMContentLoaded", function() {
