@@ -1,7 +1,7 @@
 // components/tabManager.js - Tab Manager for NHL Tables
-// 3 tabs: Matchups, Prop Odds, Game Odds
-// Blue theme (#1e40af / #1e3a8a)
-// Includes applyContainerWidth and forceRecalculateWidths matching NBA pattern
+// DIRECT COPY of NBA basketball tabManager.js with color changes:
+//   #f97316 -> #1e40af, #ea580c -> #1e3a8a
+// Includes applyContainerWidth and proper mobile/desktop width handling
 
 export const TAB_STYLES = `
     .table-wrapper {
@@ -82,100 +82,257 @@ export const TAB_STYLES = `
             font-size: 11px;
         }
         .tab-buttons {
-            gap: 3px;
+            gap: 4px;
             padding: 8px;
         }
     }
 `;
 
 export class TabManager {
-    constructor(tableInstances) {
-        this.tables = tableInstances;
-        this.activeTab = 'table0';
-        this.initialized = {};
+    constructor(tables) {
+        this.tables = tables;
+        this.currentActiveTab = 'table0';
+        this.scrollPositions = {};
+        this.tableStates = {};
+        this.tabInitialized = {};
+        this.isTransitioning = false;
+        
+        Object.keys(tables).forEach(tabId => {
+            this.tabInitialized[tabId] = false;
+        });
         
         this.injectStyles();
-        this.setupTabs();
-        this.showTab('table0');
+        this.setupTabSwitching();
+        this.initializeTab(this.currentActiveTab);
+        
+        console.log("TabManager: Initialized with tabs:", Object.keys(tables));
     }
     
     injectStyles() {
-        if (document.querySelector('#nhl-tab-styles')) return;
-        const style = document.createElement('style');
-        style.id = 'nhl-tab-styles';
-        style.textContent = TAB_STYLES;
-        document.head.appendChild(style);
+        if (!document.querySelector('#nhl-tab-manager-styles')) {
+            const style = document.createElement('style');
+            style.id = 'nhl-tab-manager-styles';
+            style.textContent = TAB_STYLES;
+            document.head.appendChild(style);
+        }
     }
-    
-    setupTabs() {
-        const tabButtons = document.querySelectorAll('.tab-button');
-        tabButtons.forEach(btn => {
-            btn.addEventListener('click', () => {
-                const tabId = btn.getAttribute('data-tab');
-                if (tabId) this.showTab(tabId);
+
+    getContainerIdForTab(tabId) {
+        const containerMap = {
+            'table0': 'table0-container',
+            'table1': 'table1-container',
+            'table2': 'table2-container'
+        };
+        return containerMap[tabId] || `${tabId}-container`;
+    }
+
+    /**
+     * Apply appropriate container and tabulator width based on screen size
+     * Mobile/tablet: Constrain both container AND tabulator to enable frozen columns
+     * Desktop: fit-content for proper dynamic sizing
+     */
+    applyContainerWidth(tableContainer) {
+        if (!tableContainer) return;
+        
+        const tabulator = tableContainer.querySelector('.tabulator');
+        
+        if (window.innerWidth <= 1024) {
+            // Mobile/tablet: constrain to viewport for frozen column support
+            tableContainer.style.width = '100%';
+            tableContainer.style.maxWidth = '100vw';
+            tableContainer.style.overflowX = 'hidden';
+            
+            // CRITICAL: Also constrain the tabulator element
+            if (tabulator) {
+                tabulator.style.width = '100%';
+                tabulator.style.minWidth = '0';
+                tabulator.style.maxWidth = '100%';
+            }
+        } else {
+            // Desktop: use fit-content for dynamic sizing
+            tableContainer.style.width = 'fit-content';
+            tableContainer.style.maxWidth = 'none';
+            tableContainer.style.overflowX = '';
+            
+            if (tabulator) {
+                tabulator.style.width = '';
+                tabulator.style.minWidth = '';
+                tabulator.style.maxWidth = '';
+            }
+        }
+    }
+
+    setupTabSwitching() {
+        const self = this;
+        
+        document.addEventListener('click', async function(e) {
+            if (e.target.classList.contains('tab-button')) {
+                e.preventDefault();
+                
+                if (self.isTransitioning) return;
+                
+                const targetTab = e.target.getAttribute('data-tab');
+                if (targetTab === self.currentActiveTab) return;
+                
+                self.isTransitioning = true;
+                
+                try {
+                    // Save current state
+                    self.saveTabState(self.currentActiveTab);
+                    
+                    // Hide current table container
+                    const currentContainerId = self.getContainerIdForTab(self.currentActiveTab);
+                    const currentContainer = document.querySelector(`#${currentContainerId}`);
+                    
+                    if (currentContainer) {
+                        currentContainer.style.display = 'none';
+                        currentContainer.classList.remove('active-table');
+                        currentContainer.classList.add('inactive-table');
+                        
+                        // Reset width styles to prevent stale dimensions carrying over
+                        currentContainer.style.width = '';
+                        currentContainer.style.minWidth = '';
+                        currentContainer.style.maxWidth = '';
+                        currentContainer.style.overflowX = '';
+                        
+                        const currentTabElement = currentContainer.querySelector('.tabulator');
+                        if (currentTabElement) {
+                            currentTabElement.style.width = '';
+                            currentTabElement.style.minWidth = '';
+                            currentTabElement.style.maxWidth = '';
+                        }
+                    }
+                    
+                    // Update active tab button
+                    document.querySelectorAll('.tab-button').forEach(btn => {
+                        btn.classList.remove('active');
+                    });
+                    e.target.classList.add('active');
+                    
+                    // Initialize target tab if needed
+                    await self.initializeTab(targetTab);
+                    
+                    // Show target table container
+                    const targetContainerId = self.getContainerIdForTab(targetTab);
+                    const targetContainer = document.querySelector(`#${targetContainerId}`);
+                    
+                    if (targetContainer) {
+                        targetContainer.style.display = 'block';
+                        targetContainer.classList.add('active-table');
+                        targetContainer.classList.remove('inactive-table');
+                    }
+                    
+                    self.currentActiveTab = targetTab;
+                    
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                    
+                    // Redraw and restore state
+                    const targetTableWrapper = self.tables[targetTab];
+                    if (targetTableWrapper && targetTableWrapper.table) {
+                        targetTableWrapper.table.redraw(true);
+                        self.restoreTabState(targetTab);
+                        
+                        // Re-equalize columns and recalculate widths after tab switch
+                        setTimeout(() => {
+                            if (window.innerWidth > 1024) {
+                                if (targetTableWrapper.equalizeClusteredColumns) {
+                                    targetTableWrapper.equalizeClusteredColumns();
+                                }
+                                if (targetTableWrapper.calculateAndApplyWidths) {
+                                    targetTableWrapper.calculateAndApplyWidths();
+                                }
+                            }
+                            
+                            const tableContainer = targetTableWrapper.table?.element?.closest('.table-container');
+                            requestAnimationFrame(() => {
+                                self.applyContainerWidth(tableContainer);
+                            });
+                        }, 100);
+                    }
+                    
+                } catch (error) {
+                    console.error("TabManager: Error during tab switch:", error);
+                } finally {
+                    self.isTransitioning = false;
+                }
+            }
+        });
+    }
+
+    initializeTab(tabId) {
+        if (this.tabInitialized[tabId]) return Promise.resolve();
+        
+        const self = this;
+        
+        return new Promise((resolve) => {
+            requestAnimationFrame(() => {
+                const tableWrapper = this.tables[tabId];
+                
+                if (tableWrapper && !tableWrapper.isInitialized) {
+                    try {
+                        tableWrapper.initialize();
+                        this.tabInitialized[tabId] = true;
+                        
+                        setTimeout(() => {
+                            const tableContainer = tableWrapper.table?.element?.closest('.table-container');
+                            self.applyContainerWidth(tableContainer);
+                        }, 200);
+                        
+                    } catch (error) {
+                        console.error(`TabManager: Error initializing tab ${tabId}:`, error);
+                    }
+                } else if (tableWrapper && tableWrapper.isInitialized) {
+                    this.tabInitialized[tabId] = true;
+                }
+                
+                setTimeout(resolve, 100);
             });
         });
     }
-    
-    showTab(tabId) {
-        this.activeTab = tabId;
+
+    saveTabState(tabId) {
+        const tableWrapper = this.tables[tabId];
+        if (!tableWrapper || !tableWrapper.table) return;
         
-        // Update button states
-        document.querySelectorAll('.tab-button').forEach(btn => {
-            if (btn.getAttribute('data-tab') === tabId) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
-        });
-        
-        // Show/hide table containers
-        document.querySelectorAll('.table-container').forEach(container => {
-            if (container.id === `${tabId}-container`) {
-                container.classList.add('active-table');
-                container.classList.remove('inactive-table');
-            } else {
-                container.classList.remove('active-table');
-                container.classList.add('inactive-table');
-            }
-        });
-        
-        // Initialize table if first time
-        if (!this.initialized[tabId] && this.tables[tabId]) {
-            this.tables[tabId].initialize();
-            this.initialized[tabId] = true;
-        }
-        
-        // Recalculate widths after tab switch
-        setTimeout(() => {
-            this.applyContainerWidth(tabId);
-        }, 100);
-    }
-    
-    applyContainerWidth(tabId) {
-        const tableInstance = this.tables[tabId];
-        if (!tableInstance || !tableInstance.table) return;
-        
-        // Trigger redraw to fix any layout issues after tab switch
         try {
-            tableInstance.table.redraw(true);
-        } catch (e) {
-            console.log('Redraw skipped:', e.message);
+            const tableHolder = tableWrapper.table.element.querySelector('.tabulator-tableholder');
+            if (tableHolder) {
+                this.scrollPositions[tabId] = tableHolder.scrollTop;
+            }
+        } catch (error) {
+            console.error(`TabManager: Error saving state for ${tabId}:`, error);
         }
-        
-        // Force width recalculation
-        setTimeout(() => {
-            this.forceRecalculateWidths(tabId);
-        }, 50);
+    }
+
+    restoreTabState(tabId) {
+        if (this.scrollPositions[tabId]) {
+            const tableWrapper = this.tables[tabId];
+            if (!tableWrapper || !tableWrapper.table) return;
+            
+            setTimeout(() => {
+                const tableHolder = tableWrapper.table.element.querySelector('.tabulator-tableholder');
+                if (tableHolder) {
+                    tableHolder.scrollTop = this.scrollPositions[tabId];
+                }
+            }, 300);
+        }
+    }
+
+    getActiveTable() {
+        return this.tables[this.currentActiveTab];
+    }
+
+    refreshCurrentTab() {
+        const table = this.getActiveTable();
+        if (table && table.refreshData) {
+            return table.refreshData();
+        }
     }
     
-    forceRecalculateWidths(tabId) {
-        const tableInstance = this.tables[tabId];
-        if (!tableInstance || !tableInstance.table) return;
-        
-        const data = tableInstance.table.getData();
-        if (data.length > 0 && typeof tableInstance.calculateAndApplyWidths === 'function') {
-            tableInstance.calculateAndApplyWidths();
+    switchTab(tabId) {
+        const tabButton = document.querySelector(`.tab-button[data-tab="${tabId}"]`);
+        if (tabButton) {
+            tabButton.click();
         }
     }
 }
