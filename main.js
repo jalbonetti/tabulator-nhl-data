@@ -4,9 +4,7 @@
 // No expandable rows, no global expanded state
 // Mounts to: #nhl-table
 //
-// MOBILE FIX v4: white-space: nowrap on .tabulator-col-title only.
-// This forces Tabulator's fitData to expand each column to fit its
-// header text, since the header can't wrap to fit a narrow column.
+// MOBILE FIX v5: nowrap headers + reduced header height + clip buffer
 
 import { injectStyles } from './styles/tableStyles.js';
 import { NHLMatchupsTable } from './tables/nhlMatchups.js';
@@ -15,23 +13,12 @@ import { NHLGameOddsTable } from './tables/nhlGameOdds.js';
 import { TabManager } from './components/tabManager.js';
 
 /**
- * MOBILE HEADER FIX v4
+ * MOBILE HEADER FIX v5
  * 
- * The problem: tableStyles.js sets white-space: normal + word-break: break-word
- * on .tabulator-col-title. This lets headers wrap, so Tabulator's fitData thinks
- * a column only needs to be 45px wide (it'll just wrap the header text). This
- * causes both mid-word breaks AND clipping.
- * 
- * The fix: Set white-space: nowrap on ONLY .tabulator-col-title (the text element).
- * Don't touch any parent/structural elements. This makes fitData measure the full
- * unwrapped header width and expand the column accordingly.
- * 
- * The table will be wider than viewport → existing horizontal scroll handles it.
- * 
- * Previous attempts that failed:
- * v1: white-space: nowrap with low specificity → overridden by tableStyles
- * v2: min-width: max-content on .tabulator-col → broke header/data alignment
- * v3: word-break: keep-all → allowed wrapping between words, columns still too narrow
+ * Fixes three issues on mobile:
+ * 1. Headers wrapping mid-word → white-space: nowrap
+ * 2. Too much vertical space in headers → remove display:flex, use simpler layout
+ * 3. Headers slightly clipped on real iPhone → add padding-right buffer
  */
 function injectMobileHeaderFix() {
     if (document.querySelector('#nhl-mobile-header-fix')) return;
@@ -39,27 +26,30 @@ function injectMobileHeaderFix() {
     const style = document.createElement('style');
     style.id = 'nhl-mobile-header-fix';
     style.textContent = `
-        /* =============================================================
-           MOBILE HEADER FIX v4
-           Force header TEXT to not wrap. Only targets the text element,
-           not structural column elements, so Tabulator's internal
-           header↔data column width sync stays intact.
-           
-           High specificity chain beats tableStyles.js rule:
-             .tabulator-col-title { white-space: normal !important }
-           ============================================================= */
         @media screen and (max-width: 1024px) {
-            html body .tabulator-col-title,
-            html body .tabulator .tabulator-col-title,
-            html body .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title {
+            /* Fix 1: Prevent header text wrapping (forces fitData to size columns to header) */
+            /* Fix 2: Remove flex display to reduce vertical header height */
+            /* Fix 3: Add padding to prevent clipping on real devices (Safari subpixel) */
+            html body .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title,
+            html body div.tabulator div.tabulator-header div.tabulator-col div.tabulator-col-content div.tabulator-col-title {
                 white-space: nowrap !important;
                 word-break: normal !important;
                 overflow-wrap: normal !important;
+                display: block !important;
+                text-align: center !important;
+                line-height: 1.4 !important;
+                padding: 2px 4px !important;
+            }
+            
+            /* Reduce overall header row height to match NBA compact style */
+            html body .tabulator .tabulator-header .tabulator-col .tabulator-col-content,
+            html body div.tabulator div.tabulator-header div.tabulator-col div.tabulator-col-content {
+                padding: 2px 1px !important;
             }
         }
     `;
     document.head.appendChild(style);
-    console.log('NHL mobile header fix v4: white-space nowrap on col-title only');
+    console.log('NHL mobile header fix v5: nowrap + compact headers + clip buffer');
 }
 
 document.addEventListener("DOMContentLoaded", function() {
