@@ -3,11 +3,10 @@
 // CRITICAL: renderHorizontal must be "basic" for fitData layout compatibility
 // NHL-specific: team abbreviations, prop abbreviations
 //
-// MOBILE FIX: scanDataForMaxWidths now scans ALL columns on ALL devices
-// with responsive font sizes (10/11/12px). This ensures col.setWidth()
-// atomically sets both header and data widths, preventing the misalignment
-// that occurs when Tabulator's fitData sizes data cells independently
-// from headers that stay at minWidth.
+// MATCHES NBA: On mobile/tablet, only scan Best Odds Books column.
+// All other columns use Tabulator's native fitData layout which
+// naturally sizes headers and data cells to the same width.
+// Desktop: full scan of all columns with canvas measurement.
 
 import { BaseTable } from './baseTable.js';
 import { createCustomMultiSelect } from '../components/customMultiSelect.js';
@@ -142,7 +141,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             setTimeout(() => {
                 const data = this.table ? this.table.getData() : [];
                 if (data.length > 0) {
-                    // FIXED: Always scan on all devices — this sets col widths atomically
                     this.scanDataForMaxWidths(data);
                     // Desktop-only: equalize clusters and set container width
                     if (!isMobile() && !isTablet()) {
@@ -172,7 +170,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             setTimeout(() => {
                 const data = this.table ? this.table.getData() : [];
                 if (data.length > 0) {
-                    // FIXED: Always scan on all devices
                     this.scanDataForMaxWidths(data);
                     if (!isMobile() && !isTablet()) {
                         this.equalizeClusteredColumns();
@@ -204,7 +201,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         
         const data = this.table.getData() || [];
         if (data.length > 0) {
-            // FIXED: Always scan on all devices
             this.scanDataForMaxWidths(data);
             if (!isMobile() && !isTablet()) {
                 this.equalizeClusteredColumns();
@@ -260,43 +256,48 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         }
     }
 
-    // FIXED: Scan ALL columns on ALL devices with responsive font sizes.
-    // Uses col.setWidth() which atomically sets both header and data column widths,
-    // preventing the misalignment that occurs when headers stay at minWidth
-    // while Tabulator's fitData independently sizes data cells wider.
+    // MATCHES NBA: On mobile/tablet, only scan Best Odds Books.
+    // All other columns rely on Tabulator's native fitData layout.
+    // Desktop: full scan with canvas measurement + col.setWidth().
     scanDataForMaxWidths(data) {
         if (!data || data.length === 0 || !this.table) return;
         
         const mobile = isMobile();
         const tablet = isTablet();
-        const baseFontSize = mobile ? 10 : tablet ? 11 : 12;
+        const isSmallScreen = mobile || tablet;
         
-        console.log(`NHL Player Prop Odds Scanning ${data.length} rows for max column widths (font: ${baseFontSize}px)...`);
+        console.log(`NHL Player Prop Odds Scanning ${data.length} rows for max column widths...`);
         
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         
-        // FIXED: Always scan ALL columns on ALL devices
+        // MATCHES NBA: Only scan Best Odds Books on mobile/tablet.
+        // All other columns use Tabulator's native fitData on small screens.
         const maxWidths = {
-            "Player Matchup": 0,
-            "Player Team": 0,
-            "Player Prop Type": 0,
-            "Player Over/Under": 0,
-            "Player Book": 0,
-            "Player Prop Odds": 0,
-            "Player Median Odds": 0,
-            "Player Best Odds": 0,
-            "Player Best Odds Books": 0,
-            "EV %": 0,
-            "Quarter Kelly %": 0,
-            "Link": 0
+            "Player Best Odds Books": 0  // Always scan on all devices
         };
         
-        // First measure header widths with responsive font
-        ctx.font = `600 ${baseFontSize}px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif`;
+        // Only scan additional columns on desktop
+        if (!isSmallScreen) {
+            maxWidths["Player Matchup"] = 0;
+            maxWidths["Player Team"] = 0;
+            maxWidths["Player Prop Type"] = 0;
+            maxWidths["Player Over/Under"] = 0;
+            maxWidths["Player Book"] = 0;
+            maxWidths["Player Prop Odds"] = 0;
+            maxWidths["Player Median Odds"] = 0;
+            maxWidths["Player Best Odds"] = 0;
+            maxWidths["EV %"] = 0;
+            maxWidths["Quarter Kelly %"] = 0;
+            maxWidths["Link"] = 0;
+        }
+        
+        // First measure header widths (use header font weight)
+        ctx.font = '600 12px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
         const HEADER_PADDING = 16;
         const SORT_ICON_WIDTH = 16;
         
+        // Map field names to display titles for header measurement
         const fieldToTitle = {
             "Player Matchup": "Matchup",
             "Player Team": "Team",
@@ -318,8 +319,8 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             maxWidths[field] = headerWidth;
         });
         
-        // Now measure data widths with responsive font
-        ctx.font = `500 ${baseFontSize}px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif`;
+        // Now measure data widths
+        ctx.font = '500 12px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
         
         data.forEach(row => {
             Object.keys(maxWidths).forEach(field => {
@@ -350,9 +351,17 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             });
         });
         
+        // For Player Matchup on desktop, ensure minimum width for longest abbreviated matchup
+        const longestAbbrevMatchup = "VGK @ TBL";
+        const longestMatchupWidth = ctx.measureText(longestAbbrevMatchup).width;
+        if (maxWidths["Player Matchup"] !== undefined && longestMatchupWidth > maxWidths["Player Matchup"]) {
+            maxWidths["Player Matchup"] = longestMatchupWidth;
+        }
+        
         const CELL_PADDING = 16;
         const BUFFER = 8;
         
+        // Apply widths to scanned columns
         Object.keys(maxWidths).forEach(field => {
             if (maxWidths[field] > 0) {
                 const column = this.table.getColumn(field);
@@ -361,12 +370,15 @@ export class NHLPlayerPropOddsTable extends BaseTable {
                     const currentWidth = column.getWidth();
                     if (requiredWidth > currentWidth) {
                         column.setWidth(Math.ceil(requiredWidth));
+                        console.log(`NHL Player Prop Odds Set ${field} to ${Math.ceil(requiredWidth)}px (was ${currentWidth}px)`);
                     }
                 }
             }
         });
         
+        // Ensure Name column has fixed minimum width
         this.ensureNameColumnWidth();
+        
         console.log('NHL Player Prop Odds Max width scan complete');
     }
 
