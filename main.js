@@ -3,6 +3,11 @@
 // 3 tables: Matchups, Prop Odds, Game Odds
 // No expandable rows, no global expanded state
 // Mounts to: #nhl-table
+//
+// MOBILE FIX: Added injectMobileHeaderFix() after injectStyles().
+// This overrides the word-break: break-word CSS on mobile so headers
+// can't break mid-word (e.g. "Book" → "Boo k"). Headers stay on one
+// line, columns size to fit header text, table scrolls horizontally.
 
 import { injectStyles } from './styles/tableStyles.js';
 import { NHLMatchupsTable } from './tables/nhlMatchups.js';
@@ -10,11 +15,48 @@ import { NHLPlayerPropOddsTable } from './tables/nhlPlayerPropOdds.js';
 import { NHLGameOddsTable } from './tables/nhlGameOdds.js';
 import { TabManager } from './components/tabManager.js';
 
+/**
+ * MOBILE HEADER FIX: Prevent mid-word header wrapping on mobile/tablet.
+ * 
+ * The existing CSS has:
+ *   .tabulator-col-title { white-space: normal; word-break: break-word; }
+ * 
+ * This allows headers to wrap AND break mid-word when columns are narrow.
+ * On mobile (14 columns squeezed to viewport width), each column gets ~40-50px,
+ * so "Book" becomes "Boo" + "k", "Median Odds" becomes "Med" + "ian" + "Odds".
+ * 
+ * This fix forces headers to stay on one line on mobile. Each column then
+ * sizes to fit its header text, making the table wider than the viewport.
+ * The existing overflow-x: auto on the tableholder enables horizontal scroll.
+ */
+function injectMobileHeaderFix() {
+    if (document.querySelector('#nhl-mobile-header-fix')) return;
+    
+    const style = document.createElement('style');
+    style.id = 'nhl-mobile-header-fix';
+    style.textContent = `
+        @media screen and (max-width: 1024px) {
+            .tabulator-col-title {
+                white-space: nowrap !important;
+                word-break: normal !important;
+                overflow-wrap: normal !important;
+                text-overflow: ellipsis !important;
+                overflow: hidden !important;
+            }
+        }
+    `;
+    document.head.appendChild(style);
+    console.log('NHL mobile header fix injected: headers will not wrap on mobile');
+}
+
 document.addEventListener("DOMContentLoaded", function() {
     console.log("DOM loaded - initializing NHL table system");
     
     // Inject styles first
     injectStyles();
+    
+    // MOBILE FIX: Override header wrapping behavior on mobile/tablet
+    injectMobileHeaderFix();
     
     // Find the existing nhl-table element
     const existingTable = document.getElementById('nhl-table');
