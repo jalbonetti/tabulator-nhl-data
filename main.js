@@ -4,7 +4,7 @@
 // No expandable rows, no global expanded state
 // Mounts to: #nhl-table
 //
-// MOBILE FIX v5: nowrap headers + reduced header height + clip buffer
+// MOBILE FIX v6: nowrap + sort arrow space + compact vertical spacing
 
 import { injectStyles } from './styles/tableStyles.js';
 import { NHLMatchupsTable } from './tables/nhlMatchups.js';
@@ -13,12 +13,17 @@ import { NHLGameOddsTable } from './tables/nhlGameOdds.js';
 import { TabManager } from './components/tabManager.js';
 
 /**
- * MOBILE HEADER FIX v5
+ * MOBILE HEADER FIX v6
  * 
- * Fixes three issues on mobile:
- * 1. Headers wrapping mid-word → white-space: nowrap
- * 2. Too much vertical space in headers → remove display:flex, use simpler layout
- * 3. Headers slightly clipped on real iPhone → add padding-right buffer
+ * v5 issues: display:block broke vertical layout (extra gap), 4px padding
+ * wasn't enough for sort arrow (~18px wide).
+ * 
+ * v6 approach: Keep display:flex (same as desktop) for proper vertical layout.
+ * Just override white-space + word-break to prevent wrapping. The sort arrow
+ * is handled by Tabulator as a sibling element inside .tabulator-col-content,
+ * so we don't need extra padding — we need the .tabulator-col to be wider.
+ * We bump minWidth on column definitions instead, but as a CSS safety net
+ * we ensure the arrow area has space.
  */
 function injectMobileHeaderFix() {
     if (document.querySelector('#nhl-mobile-header-fix')) return;
@@ -27,29 +32,50 @@ function injectMobileHeaderFix() {
     style.id = 'nhl-mobile-header-fix';
     style.textContent = `
         @media screen and (max-width: 1024px) {
-            /* Fix 1: Prevent header text wrapping (forces fitData to size columns to header) */
-            /* Fix 2: Remove flex display to reduce vertical header height */
-            /* Fix 3: Add padding to prevent clipping on real devices (Safari subpixel) */
+            /* Prevent header text wrapping — forces fitData to size columns wider */
             html body .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title,
             html body div.tabulator div.tabulator-header div.tabulator-col div.tabulator-col-content div.tabulator-col-title {
                 white-space: nowrap !important;
                 word-break: normal !important;
                 overflow-wrap: normal !important;
-                display: block !important;
-                text-align: center !important;
-                line-height: 1.4 !important;
-                padding: 2px 4px !important;
             }
             
-            /* Reduce overall header row height to match NBA compact style */
+            /* Compact header vertical spacing to match NBA */
+            html body .tabulator .tabulator-header .tabulator-col,
+            html body div.tabulator div.tabulator-header div.tabulator-col {
+                padding: 0 !important;
+            }
+            
             html body .tabulator .tabulator-header .tabulator-col .tabulator-col-content,
             html body div.tabulator div.tabulator-header div.tabulator-col div.tabulator-col-content {
-                padding: 2px 1px !important;
+                padding: 4px 2px 2px 2px !important;
+            }
+            
+            /* Tighten the filter area below header text */
+            html body .tabulator .tabulator-header .tabulator-col .tabulator-header-filter,
+            html body div.tabulator div.tabulator-header div.tabulator-col div.tabulator-header-filter {
+                padding: 0 2px 2px 2px !important;
+                margin: 0 !important;
+            }
+            
+            /* Ensure sort arrow doesn't overlap header text.
+               Tabulator places the sort arrow as an ::after or sibling.
+               Give the col-content enough right space for it. */
+            html body .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title-holder,
+            html body div.tabulator div.tabulator-header div.tabulator-col div.tabulator-col-content div.tabulator-col-title-holder {
+                padding-right: 18px !important;
+            }
+            
+            /* Also target the arrow element directly if it exists */
+            html body .tabulator .tabulator-header .tabulator-col .tabulator-col-sorter,
+            html body div.tabulator div.tabulator-header div.tabulator-col div.tabulator-col-sorter {
+                width: 16px !important;
+                min-width: 16px !important;
             }
         }
     `;
     document.head.appendChild(style);
-    console.log('NHL mobile header fix v5: nowrap + compact headers + clip buffer');
+    console.log('NHL mobile header fix v6: nowrap + sort arrow space + compact vertical');
 }
 
 document.addEventListener("DOMContentLoaded", function() {
