@@ -3,10 +3,10 @@
 // CRITICAL: renderHorizontal must be "basic" for fitData layout compatibility
 // NHL-specific: team abbreviations, prop abbreviations
 //
-// MATCHES NBA: On mobile/tablet, only scan Best Odds Books column.
-// All other columns use Tabulator's native fitData layout which
-// naturally sizes headers and data cells to the same width.
-// Desktop: full scan of all columns with canvas measurement.
+// MATCHES NBA: On mobile/tablet, scanDataForMaxWidths only scans Best Odds Books.
+// calculateAndApplyWidths clears container widths on mobile so Tabulator's
+// native fitData layout sizes headers and data cells to the same width.
+// Desktop: full canvas scan of all columns + container width constraints.
 
 import { BaseTable } from './baseTable.js';
 import { createCustomMultiSelect } from '../components/customMultiSelect.js';
@@ -142,12 +142,12 @@ export class NHLPlayerPropOddsTable extends BaseTable {
                 const data = this.table ? this.table.getData() : [];
                 if (data.length > 0) {
                     this.scanDataForMaxWidths(data);
-                    // Desktop-only: equalize clusters and set container width
                     if (!isMobile() && !isTablet()) {
                         this.equalizeClusteredColumns();
                         this.calculateAndApplyWidths();
                     }
                 }
+                // Always ensure minimum Name width is applied
                 this.ensureNameColumnWidth();
             }, 200);
             
@@ -171,11 +171,13 @@ export class NHLPlayerPropOddsTable extends BaseTable {
                 const data = this.table ? this.table.getData() : [];
                 if (data.length > 0) {
                     this.scanDataForMaxWidths(data);
+                    // Desktop-specific operations
                     if (!isMobile() && !isTablet()) {
                         this.equalizeClusteredColumns();
                         this.calculateAndApplyWidths();
                     }
                 }
+                // Always ensure minimum Name width is applied
                 this.ensureNameColumnWidth();
             }, 200);
         });
@@ -214,17 +216,46 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         this.calculateAndApplyWidths();
     }
 
-    // Desktop: constrains table to content width + scrollbar
+    // MATCHES NBA: Calculate and apply table width based on actual column widths.
+    // On mobile/tablet, CLEARS container widths so Tabulator's fitData sizes naturally.
+    // On desktop, constrains table to content width + scrollbar.
     calculateAndApplyWidths() {
         if (!this.table) return;
-        if (isMobile() || isTablet()) return;
         
+        const tableElement = this.table.element;
+        if (!tableElement) return;
+        
+        const mobile = isMobile();
+        const tablet = isTablet();
+        const isSmallScreen = mobile || tablet;
+        
+        // MOBILE/TABLET: Clear container widths but preserve Name column minimum
+        // (matches NBA basketPlayerPropOdds.js pattern)
+        if (isSmallScreen) {
+            tableElement.style.width = '';
+            tableElement.style.minWidth = '';
+            tableElement.style.maxWidth = '';
+            
+            const tableContainer = tableElement.closest('.table-container');
+            if (tableContainer) {
+                tableContainer.style.width = '';
+                tableContainer.style.minWidth = '';
+                tableContainer.style.maxWidth = '';
+            }
+            
+            // Ensure Name column maintains minimum width on mobile
+            this.ensureNameColumnWidth();
+            
+            console.log(`NHL Player Prop Odds Mobile/tablet mode: container widths cleared, Name column preserved`);
+            return;
+        }
+        
+        // DESKTOP: Set explicit widths
         try {
             const columns = this.table.getColumns();
             let totalColumnWidth = 0;
             columns.forEach(col => { if (col.isVisible()) totalColumnWidth += col.getWidth(); });
             
-            const tableElement = this.table.element;
             const tableHolder = tableElement.querySelector('.tabulator-tableholder');
             const SCROLLBAR_WIDTH = 17;
             const totalWidthWithScrollbar = totalColumnWidth + SCROLLBAR_WIDTH;
@@ -250,7 +281,7 @@ export class NHLPlayerPropOddsTable extends BaseTable {
                 tableContainer.style.maxWidth = 'none';
             }
             
-            console.log(`NHL Player Prop Odds: Set table width to ${totalWidthWithScrollbar}px`);
+            console.log(`NHL Player Prop Odds: Set table width to ${totalWidthWithScrollbar}px (columns: ${totalColumnWidth}px + scrollbar: ${SCROLLBAR_WIDTH}px)`);
         } catch (error) {
             console.error('Error in NHL Player Prop Odds calculateAndApplyWidths:', error);
         }
@@ -572,7 +603,7 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             },
             {
                 title: "Book", field: "Player Book", widthGrow: 0,
-                minWidth: 55,
+                minWidth: 60,
                 sorter: "string", headerFilter: createCustomMultiSelect,
                 resizable: false, hozAlign: "center"
             },
