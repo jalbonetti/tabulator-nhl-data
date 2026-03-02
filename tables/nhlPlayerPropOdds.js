@@ -583,13 +583,13 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             },
             {
                 title: "Matchup", field: "Player Matchup", widthGrow: 0,
-                minWidth: 70, // Always abbreviated (e.g., "VGK @ BOS")
+                minWidth: 80, // Always abbreviated (e.g., "VGK @ BOS")
                 sorter: "string", headerFilter: createCustomMultiSelect,
                 resizable: false, hozAlign: "center", formatter: matchupFormatter
             },
             {
                 title: "Team", field: "Player Team", widthGrow: 0,
-                minWidth: 45,
+                minWidth: 55,
                 sorter: "string", headerFilter: createCustomMultiSelect,
                 resizable: false, hozAlign: "center", formatter: teamFormatter
             },
