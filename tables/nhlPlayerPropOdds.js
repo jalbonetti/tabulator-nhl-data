@@ -142,6 +142,7 @@ export class NHLPlayerPropOddsTable extends BaseTable {
                 const data = this.table ? this.table.getData() : [];
                 if (data.length > 0) {
                     this.scanDataForMaxWidths(data);
+                    // Desktop-only: equalize clusters and set container width
                     if (!isMobile() && !isTablet()) {
                         this.equalizeClusteredColumns();
                         this.calculateAndApplyWidths();
@@ -297,7 +298,7 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         const tablet = isTablet();
         const isSmallScreen = mobile || tablet;
         
-        console.log(`NHL Player Prop Odds Scanning ${data.length} rows for max column widths...`);
+        console.log(`NHL Player Prop Odds Scanning ${data.length} rows for max column widths (mobile: ${mobile}, tablet: ${tablet})...`);
         
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
