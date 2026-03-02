@@ -3,10 +3,10 @@
 // CRITICAL: renderHorizontal must be "basic" for fitData layout compatibility
 // NHL-specific: team abbreviations
 //
-// MOBILE FIX: scanDataForMaxWidths now scans ALL columns on ALL devices
-// with responsive font sizes (10/11/12px) and header measurement.
-// This ensures col.setWidth() atomically sets both header and data widths,
-// preventing the misalignment that occurs when headers stay at minWidth.
+// MATCHES NBA: On mobile/tablet, skip scanDataForMaxWidths entirely.
+// Tabulator's native fitData layout handles all column sizing on small
+// screens, keeping headers and data cells naturally aligned.
+// Desktop: full scan with canvas measurement + col.setWidth().
 
 import { BaseTable } from './baseTable.js';
 import { createCustomMultiSelect } from '../components/customMultiSelect.js';
@@ -113,7 +113,6 @@ export class NHLGameOddsTable extends BaseTable {
             setTimeout(() => {
                 const data = this.table ? this.table.getData() : [];
                 if (data.length > 0) {
-                    // FIXED: Always scan on all devices — this sets col widths atomically
                     this.scanDataForMaxWidths(data);
                     // Desktop-only: equalize clusters and set container width
                     if (!isMobile() && !isTablet()) {
@@ -134,7 +133,6 @@ export class NHLGameOddsTable extends BaseTable {
             setTimeout(() => {
                 const data = this.table ? this.table.getData() : [];
                 if (data.length > 0) {
-                    // FIXED: Always scan on all devices
                     this.scanDataForMaxWidths(data);
                     if (!isMobile() && !isTablet()) {
                         this.equalizeClusteredColumns();
@@ -163,7 +161,6 @@ export class NHLGameOddsTable extends BaseTable {
         
         const data = this.table.getData() || [];
         if (data.length > 0) {
-            // FIXED: Always scan on all devices
             this.scanDataForMaxWidths(data);
             if (!isMobile() && !isTablet()) {
                 this.equalizeClusteredColumns();
@@ -218,23 +215,22 @@ export class NHLGameOddsTable extends BaseTable {
         }
     }
 
-    // FIXED: Scan ALL columns on ALL devices with responsive font sizes.
-    // Uses col.setWidth() which atomically sets both header and data column widths.
-    // On mobile/tablet, measures abbreviated matchup text instead of full names.
+    // MATCHES NBA: Skip scanning entirely on mobile/tablet.
+    // Tabulator's native fitData layout handles all column sizing on small screens.
+    // Desktop: full scan with canvas measurement + col.setWidth().
     scanDataForMaxWidths(data) {
         if (!data || data.length === 0 || !this.table) return;
         
-        const mobile = isMobile();
-        const tablet = isTablet();
-        const isSmallScreen = mobile || tablet;
-        const baseFontSize = mobile ? 10 : tablet ? 11 : 12;
+        // Skip on mobile/tablet — let Tabulator's fitData handle sizing naturally
+        // (matches NBA basketGameOdds.js pattern)
+        if (isMobile() || isTablet()) return;
         
-        console.log(`NHL Game Odds Scanning ${data.length} rows for max column widths (font: ${baseFontSize}px)...`);
+        console.log(`NHL Game Odds Scanning ${data.length} rows for max column widths...`);
         
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
+        ctx.font = '500 12px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
         
-        // FIXED: Always scan ALL columns
         const maxWidths = {
             "Game Matchup": 0,
             "Game Prop Type": 0,
@@ -249,48 +245,16 @@ export class NHLGameOddsTable extends BaseTable {
             "Link": 0
         };
         
-        // First measure header widths with responsive font
-        ctx.font = `600 ${baseFontSize}px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif`;
-        const HEADER_PADDING = 16;
-        const SORT_ICON_WIDTH = 16;
-        
-        const fieldToTitle = {
-            "Game Matchup": "Matchup",
-            "Game Prop Type": "Prop",
-            "Game Label": "Label",
-            "Game Book": "Book",
-            "Game Odds": "Book Odds",
-            "Game Median Odds": "Median Odds",
-            "Game Best Odds": "Best Odds",
-            "Game Best Odds Books": "Best Books",
-            "EV %": "EV %",
-            "Quarter Kelly %": "Bet Size",
-            "Link": "Link"
-        };
-        
-        Object.keys(maxWidths).forEach(field => {
-            const title = fieldToTitle[field] || field;
-            const headerWidth = ctx.measureText(title).width + HEADER_PADDING + SORT_ICON_WIDTH;
-            maxWidths[field] = headerWidth;
-        });
-        
-        // Now measure data widths with responsive font
-        ctx.font = `500 ${baseFontSize}px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif`;
-        
         data.forEach(row => {
             Object.keys(maxWidths).forEach(field => {
                 const value = row[field];
                 if (value !== null && value !== undefined && value !== '') {
                     let displayValue = String(value);
-                    
-                    // On mobile, abbreviate matchup for measurement
-                    if (field === 'Game Matchup' && isSmallScreen) {
-                        displayValue = this.abbreviateMatchup(value);
-                    }
-                    
                     if (field.includes('Odds') && field !== 'Game Best Odds Books') {
                         const num = parseInt(value, 10);
-                        if (!isNaN(num)) displayValue = num > 0 ? `+${num}` : `${num}`;
+                        if (!isNaN(num)) {
+                            displayValue = num > 0 ? `+${num}` : `${num}`;
+                        }
                     }
                     if (field === 'EV %' || field === 'Quarter Kelly %') {
                         const num = parseFloat(value);
@@ -303,22 +267,23 @@ export class NHLGameOddsTable extends BaseTable {
                     if (field === 'Link') displayValue = 'Bet';
                     
                     const textWidth = ctx.measureText(displayValue).width;
-                    if (textWidth > maxWidths[field]) maxWidths[field] = textWidth;
+                    if (textWidth > maxWidths[field]) {
+                        maxWidths[field] = textWidth;
+                    }
                 }
             });
         });
         
-        // Desktop only: ensure minimum width for longest NHL matchup
-        if (!isSmallScreen) {
-            const longestMatchup = "Vegas Golden Knights @ Tampa Bay Lightning";
-            const longestMatchupWidth = ctx.measureText(longestMatchup).width;
-            if (longestMatchupWidth > maxWidths["Game Matchup"]) {
-                maxWidths["Game Matchup"] = longestMatchupWidth;
-            }
+        // Ensure minimum width for longest NHL matchup on desktop
+        const longestMatchup = "Vegas Golden Knights @ Tampa Bay Lightning";
+        const longestMatchupWidth = ctx.measureText(longestMatchup).width;
+        if (longestMatchupWidth > maxWidths["Game Matchup"]) {
+            maxWidths["Game Matchup"] = longestMatchupWidth;
+            console.log(`NHL Game Odds: Using minimum matchup width for "${longestMatchup}": ${Math.ceil(longestMatchupWidth)}px`);
         }
         
         const CELL_PADDING = 16;
-        const BUFFER = 8;
+        const BUFFER = 10;
         
         Object.keys(maxWidths).forEach(field => {
             if (maxWidths[field] > 0) {
@@ -328,6 +293,7 @@ export class NHLGameOddsTable extends BaseTable {
                     const currentWidth = column.getWidth();
                     if (requiredWidth > currentWidth) {
                         column.setWidth(Math.ceil(requiredWidth));
+                        console.log(`NHL Game Odds Expanded ${field} from ${currentWidth}px to ${Math.ceil(requiredWidth)}px`);
                     }
                 }
             }
