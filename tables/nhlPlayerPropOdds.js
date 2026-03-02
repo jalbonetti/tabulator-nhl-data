@@ -3,18 +3,13 @@
 // NHL-specific: team abbreviations, prop abbreviations
 //
 // WIDTH MANAGEMENT:
-// - scanDataForMaxWidths: mobile/tablet only scans Best Odds Books. Desktop scans all.
-// - calculateAndApplyWidths: Sets explicit pixel widths on ALL devices.
-//   GATES behind _firstCalcDone to prevent premature width setting before data scan.
+// - scanDataForMaxWidths: ALWAYS measures header widths for all columns on all devices.
+//   Data row scanning: mobile scans Best Odds Books only, desktop scans all columns.
+// - calculateAndApplyWidths: Gates behind _firstCalcDone. Sets explicit pixel widths.
 // - forceRecalculateWidths: Called by TabManager on tab switch. Also gates.
 //
 // MOBILE FIX: Container-specific CSS overrides remove the blanket max-width:100%.
-// Header titles use white-space:nowrap. Odds columns have minWidth:80 to fit headers.
-//
-// FIRST-LOAD FIX: calculateAndApplyWidths gates behind _firstCalcDone. The flag is
-// only set after the dataLoaded event callback completes the first full scan+calculate.
-// This prevents ALL premature width calculations from any code path (forceRecalculate,
-// renderComplete, TabManager initializeTab, etc).
+// Header titles use white-space:nowrap.
 
 import { BaseTable } from './baseTable.js';
 import { createCustomMultiSelect } from '../components/customMultiSelect.js';
@@ -24,7 +19,7 @@ import { isMobile, isTablet } from '../shared/config.js';
 
 const NAME_COLUMN_MIN_WIDTH = 205;
 const EV_KELLY_COLUMN_MIN_WIDTH = 65;
-const ODDS_COLUMN_MIN_WIDTH = 80; // Fits "Book Odds", "Median Odds", "Best Odds" with nowrap
+const ODDS_COLUMN_MIN_WIDTH = 80;
 
 export class NHLPlayerPropOddsTable extends BaseTable {
     constructor(elementId) {
@@ -166,15 +161,13 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             
             window.addEventListener('resize', this.debounce(() => {
                 if (this.table && this.table.getDataCount() > 0 && this._firstCalcDone) {
-                    this.calculateAndApplyWidths();
+                    this._doCalculateAndApplyWidths();
                     this.ensureNameColumnWidth();
                 }
             }, 250));
         });
         
         this.table.on("dataLoaded", () => {
-            // First time we have real data. Run full scan + calculate.
-            // This is the ONLY code path that sets _firstCalcDone = true.
             setTimeout(() => {
                 const data = this.table ? this.table.getData() : [];
                 if (data.length > 0) {
@@ -182,7 +175,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
                     if (!isMobile() && !isTablet()) {
                         this.equalizeClusteredColumns();
                     }
-                    // Bypass the _firstCalcDone gate for this one call
                     this._doCalculateAndApplyWidths();
                     this.ensureNameColumnWidth();
                     this._firstCalcDone = true;
@@ -238,13 +230,11 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         if (this._firstCalcDone) this._doCalculateAndApplyWidths();
     }
 
-    // Public entry point — gates behind _firstCalcDone
     calculateAndApplyWidths() {
         if (!this._firstCalcDone) return;
         this._doCalculateAndApplyWidths();
     }
 
-    // Internal — does the actual work, no gating
     _doCalculateAndApplyWidths() {
         if (!this.table) return;
         
@@ -303,6 +293,10 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         }
     }
 
+    // FIXED: Now measures header widths for ALL columns on ALL devices.
+    // Data row scanning: mobile scans Best Odds Books only, desktop scans all.
+    // This ensures columns like "Book Odds", "Median Odds", "Best Odds" get
+    // properly sized to fit their header text with white-space:nowrap on first load.
     scanDataForMaxWidths(data) {
         if (!data || data.length === 0 || !this.table) return;
         
@@ -315,24 +309,15 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         
-        const maxWidths = {
-            "Player Best Odds Books": 0
+        // ALL columns get header measurement on ALL devices
+        const allFields = {
+            "Player Matchup": 0, "Player Team": 0, "Player Prop Type": 0,
+            "Player Over/Under": 0, "Player Book": 0, "Player Prop Odds": 0,
+            "Player Median Odds": 0, "Player Best Odds": 0,
+            "Player Best Odds Books": 0, "EV %": 0, "Quarter Kelly %": 0, "Link": 0
         };
         
-        if (!isSmallScreen) {
-            maxWidths["Player Matchup"] = 0;
-            maxWidths["Player Team"] = 0;
-            maxWidths["Player Prop Type"] = 0;
-            maxWidths["Player Over/Under"] = 0;
-            maxWidths["Player Book"] = 0;
-            maxWidths["Player Prop Odds"] = 0;
-            maxWidths["Player Median Odds"] = 0;
-            maxWidths["Player Best Odds"] = 0;
-            maxWidths["EV %"] = 0;
-            maxWidths["Quarter Kelly %"] = 0;
-            maxWidths["Link"] = 0;
-        }
-        
+        // Measure header widths for ALL columns (critical for nowrap headers)
         ctx.font = '600 12px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
         const HEADER_PADDING = 16;
         const SORT_ICON_WIDTH = 16;
@@ -345,16 +330,21 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             "Quarter Kelly %": "Bet Size", "Link": "Link"
         };
         
-        Object.keys(maxWidths).forEach(field => {
+        Object.keys(allFields).forEach(field => {
             const title = fieldToTitle[field] || field;
             const headerWidth = ctx.measureText(title).width + HEADER_PADDING + SORT_ICON_WIDTH;
-            maxWidths[field] = headerWidth;
+            allFields[field] = headerWidth;
         });
         
+        // Data row scanning: mobile = Best Odds Books only, desktop = all columns
         ctx.font = '500 12px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
         
+        const dataFieldsToScan = isSmallScreen
+            ? ["Player Best Odds Books"]  // Mobile: only scan variable-width column
+            : Object.keys(allFields);     // Desktop: scan all
+        
         data.forEach(row => {
-            Object.keys(maxWidths).forEach(field => {
+            dataFieldsToScan.forEach(field => {
                 const value = row[field];
                 if (value !== null && value !== undefined && value !== '') {
                     let displayValue = String(value);
@@ -376,25 +366,27 @@ export class NHLPlayerPropOddsTable extends BaseTable {
                     if (field === 'Link') displayValue = 'Bet';
                     
                     const textWidth = ctx.measureText(displayValue).width;
-                    if (textWidth > maxWidths[field]) maxWidths[field] = textWidth;
+                    if (textWidth > allFields[field]) allFields[field] = textWidth;
                 }
             });
         });
         
-        const longestAbbrevMatchup = "VGK @ TBL";
-        const longestMatchupWidth = ctx.measureText(longestAbbrevMatchup).width;
-        if (maxWidths["Player Matchup"] !== undefined && longestMatchupWidth > maxWidths["Player Matchup"]) {
-            maxWidths["Player Matchup"] = longestMatchupWidth;
+        if (!isSmallScreen) {
+            const longestAbbrevMatchup = "VGK @ TBL";
+            const longestMatchupWidth = ctx.measureText(longestAbbrevMatchup).width;
+            if (longestMatchupWidth > allFields["Player Matchup"]) {
+                allFields["Player Matchup"] = longestMatchupWidth;
+            }
         }
         
         const CELL_PADDING = 16;
         const BUFFER = 8;
         
-        Object.keys(maxWidths).forEach(field => {
-            if (maxWidths[field] > 0) {
+        Object.keys(allFields).forEach(field => {
+            if (allFields[field] > 0) {
                 const column = this.table.getColumn(field);
                 if (column) {
-                    const requiredWidth = maxWidths[field] + CELL_PADDING + BUFFER;
+                    const requiredWidth = allFields[field] + CELL_PADDING + BUFFER;
                     const currentWidth = column.getWidth();
                     if (requiredWidth > currentWidth) {
                         column.setWidth(Math.ceil(requiredWidth));
