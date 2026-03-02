@@ -163,6 +163,15 @@ function injectMinimalStyles() {
             color: #333 !important;
         }
         
+        /* Custom multi-select dropdown BUTTON in headers: bold dark text */
+        /* These are <button> elements, not <input>, created by customMultiSelect.js */
+        .custom-multiselect-button,
+        .tabulator-header-filter .custom-multiselect-button,
+        .tabulator-header-filter button {
+            font-weight: 600 !important;
+            color: #333 !important;
+        }
+        
         /* Data cells: single-line with ellipsis (no padding/border - Webflow provides those) */
         .tabulator-cell {
             white-space: nowrap !important;
@@ -255,21 +264,35 @@ function injectMinimalStyles() {
         
         /* =====================================================
            FIX #2: Frozen cell backgrounds — ALL screen sizes
-           Previously these were ONLY inside the mobile media query,
-           so desktop frozen Name column had mismatched colors.
-           Colors fixed: #f5f5f5 -> #fafafa, #fff7ed -> #eff6ff
+           Uses background shorthand consistently (not background-color)
+           because the base rule uses background:inherit which resets
+           all background sub-properties. background-color alone loses.
+           Added :nth-child selectors as fallback since Tabulator may
+           not always apply tabulator-row-even/odd classes.
            ===================================================== */
         .tabulator-row .tabulator-cell.tabulator-frozen {
             background: inherit !important;
         }
+        /* Class-based selectors */
         .tabulator-row.tabulator-row-even .tabulator-cell.tabulator-frozen {
-            background-color: #fafafa !important;
+            background: #fafafa !important;
         }
         .tabulator-row.tabulator-row-odd .tabulator-cell.tabulator-frozen {
-            background-color: #ffffff !important;
+            background: #ffffff !important;
         }
+        /* :nth-child fallback selectors (higher specificity path) */
+        .tabulator .tabulator-tableholder .tabulator-table .tabulator-row:nth-child(even) .tabulator-cell.tabulator-frozen {
+            background: #fafafa !important;
+        }
+        .tabulator .tabulator-tableholder .tabulator-table .tabulator-row:nth-child(odd) .tabulator-cell.tabulator-frozen {
+            background: #ffffff !important;
+        }
+        /* Hover - must come AFTER even/odd to win cascade */
         .tabulator-row:hover .tabulator-cell.tabulator-frozen {
-            background-color: #eff6ff !important;
+            background: #eff6ff !important;
+        }
+        .tabulator .tabulator-tableholder .tabulator-table .tabulator-row:hover .tabulator-cell.tabulator-frozen {
+            background: #eff6ff !important;
         }
         
         /* Desktop: grey background fills empty space */
@@ -311,14 +334,22 @@ function injectMinimalStyles() {
                 left: 0 !important;
                 z-index: 10 !important;
             }
+            /* Class-based selectors */
             .tabulator-row.tabulator-row-even .tabulator-cell.tabulator-frozen {
-                background-color: #fafafa !important;
+                background: #fafafa !important;
             }
             .tabulator-row.tabulator-row-odd .tabulator-cell.tabulator-frozen {
-                background-color: #ffffff !important;
+                background: #ffffff !important;
+            }
+            /* :nth-child fallback selectors */
+            .tabulator .tabulator-table .tabulator-row:nth-child(even) .tabulator-cell.tabulator-frozen {
+                background: #fafafa !important;
+            }
+            .tabulator .tabulator-table .tabulator-row:nth-child(odd) .tabulator-cell.tabulator-frozen {
+                background: #ffffff !important;
             }
             .tabulator-row:hover .tabulator-cell.tabulator-frozen {
-                background-color: #eff6ff !important;
+                background: #eff6ff !important;
             }
             .tabulator-header .tabulator-col.tabulator-frozen {
                 position: sticky !important;
@@ -416,6 +447,12 @@ function injectFullStyles() {
             font-weight: 600 !important;
             color: #333 !important;
         }
+        .custom-multiselect-button,
+        .tabulator-header-filter .custom-multiselect-button,
+        .tabulator-header-filter button {
+            font-weight: 600 !important;
+            color: #333 !important;
+        }
         .tabulator-frozen.tabulator-frozen-left {
             border-right: 2px solid rgba(30, 64, 175, 0.4) !important;
             box-shadow: 2px 0 4px rgba(0,0,0,0.08) !important;
@@ -428,7 +465,8 @@ function injectFullStyles() {
         .tabulator-row .tabulator-frozen { background: inherit !important; }
         .tabulator-row.tabulator-row-even .tabulator-frozen,
         .tabulator-row:nth-child(even) .tabulator-frozen { background: #fafafa !important; }
-        .tabulator-row.tabulator-row-odd .tabulator-frozen { background: #ffffff !important; }
+        .tabulator-row.tabulator-row-odd .tabulator-frozen,
+        .tabulator-row:nth-child(odd) .tabulator-frozen { background: #ffffff !important; }
         .tabulator-row:hover .tabulator-frozen { background: #eff6ff !important; }
         .min-max-filter-container, .tabulator .min-max-filter-container,
         .tabulator-header .min-max-filter-container,
@@ -499,6 +537,8 @@ function injectFullStyles() {
             }
             .tabulator-row.tabulator-row-even .tabulator-cell.tabulator-frozen { background: #fafafa !important; }
             .tabulator-row.tabulator-row-odd .tabulator-cell.tabulator-frozen { background: #ffffff !important; }
+            .tabulator-row:nth-child(even) .tabulator-cell.tabulator-frozen { background: #fafafa !important; }
+            .tabulator-row:nth-child(odd) .tabulator-cell.tabulator-frozen { background: #ffffff !important; }
             .tabulator-row:hover .tabulator-cell.tabulator-frozen { background: #eff6ff !important; }
             .tabulator-header .tabulator-col.tabulator-frozen {
                 position: sticky !important; left: 0 !important; z-index: 101 !important;
