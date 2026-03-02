@@ -129,7 +129,7 @@ export class TabManager {
     /**
      * Apply appropriate container and tabulator width based on screen size
      * Mobile/tablet: Constrain both container AND tabulator to enable frozen columns
-     * Desktop: fit-content for proper dynamic sizing
+     * Desktop: 100% width so tables fill the page
      */
     applyContainerWidth(tableContainer) {
         if (!tableContainer) return;
@@ -149,15 +149,15 @@ export class TabManager {
                 tabulator.style.maxWidth = '100%';
             }
         } else {
-            // Desktop: use fit-content for dynamic sizing
-            tableContainer.style.width = 'fit-content';
-            tableContainer.style.maxWidth = 'none';
+            // Desktop: full width so tables fill the page (matches NBA behavior)
+            tableContainer.style.width = '100%';
+            tableContainer.style.maxWidth = '100%';
             tableContainer.style.overflowX = '';
             
             if (tabulator) {
-                tabulator.style.width = '';
+                tabulator.style.width = '100%';
                 tabulator.style.minWidth = '';
-                tabulator.style.maxWidth = '';
+                tabulator.style.maxWidth = '100%';
             }
         }
     }
