@@ -78,29 +78,7 @@ export class NHLGameOddsTable extends BaseTable {
         return abbreviated;
     }
 
-    _injectHeaderNoWrapStyles() {
-        const styleId = 'nhl-header-nowrap';
-        if (document.querySelector(`#${styleId}`)) return;
-        
-        const style = document.createElement('style');
-        style.id = styleId;
-        style.textContent = `
-            /* Force ALL column header titles to single line — overrides
-               tableStyles.js white-space:normal and word-break:break-word */
-            .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title {
-                white-space: nowrap !important;
-                word-break: normal !important;
-                overflow-wrap: normal !important;
-                overflow: hidden !important;
-                text-overflow: ellipsis !important;
-            }
-        `;
-        document.head.appendChild(style);
-        console.log('NHL: Injected header no-wrap styles');
-    }
-
     initialize() {
-        this._injectHeaderNoWrapStyles();
         const isSmallScreen = isMobile() || isTablet();
         const baseConfig = this.getBaseConfig();
         
@@ -132,7 +110,6 @@ export class NHLGameOddsTable extends BaseTable {
                         this.calculateAndApplyWidths();
                     }
                 }
-                this.ensureHeaderMinWidths();
             }, 200);
             
             window.addEventListener('resize', this.debounce(() => {
@@ -150,7 +127,6 @@ export class NHLGameOddsTable extends BaseTable {
                     this.calculateAndApplyWidths();
                 }, 100);
             }
-            setTimeout(() => this.ensureHeaderMinWidths(), 50);
         });
         
         this.table.on("dataLoaded", () => {
@@ -163,7 +139,6 @@ export class NHLGameOddsTable extends BaseTable {
                         this.calculateAndApplyWidths();
                     }
                 }
-                this.ensureHeaderMinWidths();
             }, 200);
         });
     }
@@ -175,38 +150,6 @@ export class NHLGameOddsTable extends BaseTable {
             clearTimeout(timeout);
             timeout = setTimeout(() => func.apply(this, args), wait);
         };
-    }
-
-    // Ensure ALL column headers fit on one line without wrapping on any device
-    // Uses actual DOM scrollWidth instead of canvas measurement for accuracy
-    ensureHeaderMinWidths() {
-        if (!this.table) return;
-        
-        const tableElement = this.table.element;
-        if (!tableElement) return;
-        
-        const headerCols = tableElement.querySelectorAll('.tabulator-col:not(.tabulator-col-group)');
-        
-        headerCols.forEach(colEl => {
-            const titleEl = colEl.querySelector('.tabulator-col-title');
-            if (!titleEl) return;
-            
-            // scrollWidth = actual text width needed; clientWidth = visible width
-            const textNeeded = titleEl.scrollWidth;
-            const available = titleEl.clientWidth;
-            
-            if (textNeeded > available) {
-                const field = colEl.getAttribute('tabulator-field');
-                if (!field) return;
-                
-                const col = this.table.getColumn(field);
-                if (!col) return;
-                
-                const deficit = textNeeded - available;
-                const newWidth = col.getWidth() + deficit + 4; // 4px safety buffer
-                col.setWidth(Math.ceil(newWidth));
-            }
-        });
     }
 
     // FIX: Added forceRecalculateWidths - called by TabManager on tab switch
@@ -222,7 +165,6 @@ export class NHLGameOddsTable extends BaseTable {
                 this.calculateAndApplyWidths();
             }
         }
-        this.ensureHeaderMinWidths();
     }
 
     // Backward compatibility alias for main.js resize handler
@@ -288,17 +230,18 @@ export class NHLGameOddsTable extends BaseTable {
     }
 
     // Scan ALL data to find max widths needed for text columns
+    // CRITICAL: Always measures header widths on ALL devices so headers and data stay in sync
     scanDataForMaxWidths(data) {
         if (!data || data.length === 0 || !this.table) return;
         
-        // Skip on mobile/tablet since we use abbreviated matchups
-        if (isMobile() || isTablet()) return;
+        const mobile = isMobile();
+        const tablet = isTablet();
+        const baseFontSize = mobile ? 10 : tablet ? 11 : 12;
         
         console.log(`NHL Game Odds Scanning ${data.length} rows for max column widths...`);
         
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        ctx.font = '500 12px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
         
         const maxWidths = {
             "Game Matchup": 0,
@@ -313,6 +256,34 @@ export class NHLGameOddsTable extends BaseTable {
             "Quarter Kelly %": 0,
             "Link": 0
         };
+        
+        // First measure header widths — uses responsive font size
+        ctx.font = `600 ${baseFontSize}px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif`;
+        const HEADER_PADDING = 16;
+        const SORT_ICON_WIDTH = 16;
+        
+        const fieldToTitle = {
+            "Game Matchup": "Matchup",
+            "Game Prop Type": "Prop",
+            "Game Label": "Label",
+            "Game Book": "Book",
+            "Game Odds": "Book Odds",
+            "Game Median Odds": "Median Odds",
+            "Game Best Odds": "Best Odds",
+            "Game Best Odds Books": "Best Books",
+            "EV %": "EV %",
+            "Quarter Kelly %": "Bet Size",
+            "Link": "Link"
+        };
+        
+        Object.keys(maxWidths).forEach(field => {
+            const title = fieldToTitle[field] || field;
+            const headerWidth = ctx.measureText(title).width + HEADER_PADDING + SORT_ICON_WIDTH;
+            maxWidths[field] = headerWidth;
+        });
+        
+        // Now measure data widths — also uses responsive font size
+        ctx.font = `500 ${baseFontSize}px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif`;
         
         data.forEach(row => {
             Object.keys(maxWidths).forEach(field => {
@@ -333,6 +304,10 @@ export class NHLGameOddsTable extends BaseTable {
                             const moneyDisplay = '$99999.99';
                             displayValue = pctDisplay.length > moneyDisplay.length ? pctDisplay : moneyDisplay;
                         }
+                    }
+                    // Abbreviate matchup on mobile/tablet
+                    if (field === 'Game Matchup' && (mobile || tablet)) {
+                        displayValue = this.abbreviateMatchup(value);
                     }
                     if (field === 'Link') {
                         displayValue = 'Bet';
@@ -486,49 +461,49 @@ export class NHLGameOddsTable extends BaseTable {
                 resizable: false, hozAlign: "left", formatter: matchupFormatter
             },
             {
-                title: "Prop", field: "Game Prop Type", widthGrow: 0, minWidth: 60,
+                title: "Prop", field: "Game Prop Type", widthGrow: 0, minWidth: 55,
                 sorter: "string", headerFilter: createCustomMultiSelect,
                 resizable: false, hozAlign: "center"
             },
             {
-                title: "Label", field: "Game Label", widthGrow: 0, minWidth: 60,
+                title: "Label", field: "Game Label", widthGrow: 0, minWidth: 50,
                 sorter: "string", headerFilter: createCustomMultiSelect,
                 resizable: false, hozAlign: "center"
             },
             {
-                title: "Line", field: "Game Line", widthGrow: 0, minWidth: 55,
+                title: "Line", field: "Game Line", widthGrow: 0, minWidth: 50,
                 sorter: "number",
                 headerFilter: createMinMaxFilter, headerFilterFunc: minMaxFilterFunction,
                 headerFilterLiveFilter: false, resizable: false, hozAlign: "center"
             },
             {
-                title: "Book", field: "Game Book", widthGrow: 0, minWidth: 60,
+                title: "Book", field: "Game Book", widthGrow: 0, minWidth: 55,
                 sorter: "string", headerFilter: createCustomMultiSelect,
                 resizable: false, hozAlign: "center"
             },
             {
-                title: "Book Odds", field: "Game Odds", widthGrow: 0, minWidth: 70,
+                title: "Book Odds", field: "Game Odds", widthGrow: 0, minWidth: 55,
                 sorter: function(a, b) { return self.oddsSorter(a, b); },
                 headerFilter: createMinMaxFilter, headerFilterFunc: minMaxFilterFunction,
                 headerFilterLiveFilter: false, resizable: false,
                 formatter: oddsFormatter, hozAlign: "center", cssClass: "cluster-odds"
             },
             {
-                title: "Median Odds", field: "Game Median Odds", widthGrow: 0, minWidth: 75,
+                title: "Median Odds", field: "Game Median Odds", widthGrow: 0, minWidth: 55,
                 sorter: function(a, b) { return self.oddsSorter(a, b); },
                 headerFilter: createMinMaxFilter, headerFilterFunc: minMaxFilterFunction,
                 headerFilterLiveFilter: false, resizable: false,
                 formatter: oddsFormatter, hozAlign: "center", cssClass: "cluster-odds"
             },
             {
-                title: "Best Odds", field: "Game Best Odds", widthGrow: 0, minWidth: 70,
+                title: "Best Odds", field: "Game Best Odds", widthGrow: 0, minWidth: 55,
                 sorter: function(a, b) { return self.oddsSorter(a, b); },
                 headerFilter: createMinMaxFilter, headerFilterFunc: minMaxFilterFunction,
                 headerFilterLiveFilter: false, resizable: false,
                 formatter: oddsFormatter, hozAlign: "center", cssClass: "cluster-odds"
             },
             {
-                title: "Best Books", field: "Game Best Odds Books", widthGrow: 0, minWidth: 80,
+                title: "Best Books", field: "Game Best Odds Books", widthGrow: 0, minWidth: 70,
                 sorter: "string", resizable: false, hozAlign: "center"
             },
             {
