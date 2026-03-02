@@ -621,13 +621,13 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             },
             {
                 title: "Book", field: "Player Book", widthGrow: 0,
-                minWidth: 55,
+                minWidth: 60,
                 sorter: "string", headerFilter: createCustomMultiSelect,
                 resizable: false, hozAlign: "center"
             },
             {
                 title: "Book Odds", field: "Player Prop Odds", widthGrow: 0,
-                minWidth: 55,
+                minWidth: 70,
                 sorter: function(a, b) { return self.oddsSorter(a, b); },
                 headerFilter: createMinMaxFilter, headerFilterFunc: minMaxFilterFunction,
                 headerFilterLiveFilter: false, resizable: false,
@@ -635,7 +635,7 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             },
             {
                 title: "Median Odds", field: "Player Median Odds", widthGrow: 0,
-                minWidth: 55,
+                minWidth: 75,
                 sorter: function(a, b) { return self.oddsSorter(a, b); },
                 headerFilter: createMinMaxFilter, headerFilterFunc: minMaxFilterFunction,
                 headerFilterLiveFilter: false, resizable: false,
@@ -643,7 +643,7 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             },
             {
                 title: "Best Odds", field: "Player Best Odds", widthGrow: 0,
-                minWidth: 55,
+                minWidth: 70,
                 sorter: function(a, b) { return self.oddsSorter(a, b); },
                 headerFilter: createMinMaxFilter, headerFilterFunc: minMaxFilterFunction,
                 headerFilterLiveFilter: false, resizable: false,
@@ -651,7 +651,7 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             },
             {
                 title: "Best Books", field: "Player Best Odds Books", widthGrow: 0,
-                minWidth: 70,
+                minWidth: 80,
                 sorter: "string", resizable: false, hozAlign: "center"
             },
             {
