@@ -317,7 +317,7 @@ export class NHLGameOddsTable extends BaseTable {
                                 displayValue = pctDisplay.length > moneyDisplay.length ? pctDisplay : moneyDisplay;
                             }
                         }
-                        if (field === 'Game Matchup') displayValue = this.abbreviateMatchup(value);
+                        if (field === 'Game Matchup') displayValue = value; // Desktop: measure full names
                         if (field === 'Link') displayValue = 'Bet';
                         
                         const textWidth = ctx.measureText(displayValue).width;
@@ -325,6 +325,15 @@ export class NHLGameOddsTable extends BaseTable {
                     }
                 });
             });
+            
+            // Ensure minimum width for Game Matchup accounts for longest possible matchup
+            // (matching NBA basketGameOdds.js pattern)
+            const longestMatchup = "Philadelphia Flyers @ Pittsburgh Penguins";
+            const longestMatchupWidth = ctx.measureText(longestMatchup).width;
+            if (longestMatchupWidth > maxWidths["Game Matchup"]) {
+                maxWidths["Game Matchup"] = longestMatchupWidth;
+                console.log(`NHL Game Odds: Using minimum matchup width for "${longestMatchup}": ${Math.ceil(longestMatchupWidth)}px`);
+            }
         }
         
         const CELL_PADDING = 16;
@@ -450,9 +459,16 @@ export class NHLGameOddsTable extends BaseTable {
             return link;
         };
 
+        // Matchup formatter - abbreviates team names on mobile/tablet only
         const matchupFormatter = (cell) => {
             const value = cell.getValue();
-            return value ? self.abbreviateMatchup(value) : '-';
+            if (value === null || value === undefined || value === '') return '-';
+            // On mobile/tablet, abbreviate team names
+            if (isSmallScreen) {
+                return self.abbreviateMatchup(value);
+            }
+            // On desktop, show full names
+            return value;
         };
 
         return [
