@@ -153,9 +153,7 @@ export class NHLGameOddsTable extends BaseTable {
                 const data = this.table ? this.table.getData() : [];
                 if (data.length > 0) {
                     this.scanDataForMaxWidths(data);
-                    if (!isMobile() && !isTablet()) {
-                        this.equalizeClusteredColumns();
-                    }
+                    this.equalizeClusteredColumns();
                     this._doCalculateAndApplyWidths();
                     this._firstCalcDone = true;
                     console.log('NHL Game Odds: First calc done, width updates now enabled');
@@ -187,9 +185,7 @@ export class NHLGameOddsTable extends BaseTable {
         const data = this.table.getData() || [];
         if (data.length > 0) {
             this.scanDataForMaxWidths(data);
-            if (!isMobile() && !isTablet()) {
-                this.equalizeClusteredColumns();
-            }
+            this.equalizeClusteredColumns();
         }
         this._doCalculateAndApplyWidths();
     }
@@ -375,7 +371,9 @@ export class NHLGameOddsTable extends BaseTable {
     }
 
     equalizeClusteredColumns() {
-        if (!this.table || isMobile() || isTablet()) return;
+        if (!this.table) return;
+        
+        const isSmallScreen = isMobile() || isTablet();
         
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
@@ -384,32 +382,56 @@ export class NHLGameOddsTable extends BaseTable {
         const SORT_ICON_WIDTH = 20;
         
         const oddsCluster = ['Game Odds', 'Game Median Odds', 'Game Best Odds'];
-        let maxOddsWidth = 0;
-        oddsCluster.forEach(field => {
-            const col = this.table.getColumn(field);
-            if (col && col.getWidth() > maxOddsWidth) maxOddsWidth = col.getWidth();
-        });
-        ['Book Odds', 'Median Odds', 'Best Odds'].forEach(title => {
-            const w = ctx.measureText(title).width + CELL_PADDING + SORT_ICON_WIDTH;
-            if (w > maxOddsWidth) maxOddsWidth = w;
-        });
-        oddsCluster.forEach(field => {
-            const col = this.table.getColumn(field);
-            if (col) col.setWidth(Math.ceil(maxOddsWidth));
-        });
         
-        const evKellyCluster = ['EV %', 'Quarter Kelly %'];
-        let maxEvKellyWidth = EV_KELLY_COLUMN_MIN_WIDTH;
-        evKellyCluster.forEach(field => {
-            const col = this.table.getColumn(field);
-            if (col && col.getWidth() > maxEvKellyWidth) maxEvKellyWidth = col.getWidth();
-        });
-        evKellyCluster.forEach(field => {
-            const col = this.table.getColumn(field);
-            if (col) col.setWidth(Math.ceil(maxEvKellyWidth));
-        });
-        
-        console.log(`NHL Game Odds Equalized odds to ${Math.ceil(maxOddsWidth)}px, EV/Kelly to ${Math.ceil(maxEvKellyWidth)}px`);
+        if (isSmallScreen) {
+            // MOBILE: Size all odds columns to "Median Odds" header width (the widest header)
+            const medianOddsHeaderWidth = ctx.measureText('Median Odds').width + CELL_PADDING + SORT_ICON_WIDTH;
+            const targetWidth = Math.ceil(medianOddsHeaderWidth);
+            oddsCluster.forEach(field => {
+                const col = this.table.getColumn(field);
+                if (col) col.setWidth(targetWidth);
+            });
+            
+            // Also equalize EV/Kelly on mobile
+            const evKellyCluster = ['EV %', 'Quarter Kelly %'];
+            const betSizeHeaderWidth = ctx.measureText('Bet Size').width + CELL_PADDING + SORT_ICON_WIDTH;
+            const evHeaderWidth = ctx.measureText('EV %').width + CELL_PADDING + SORT_ICON_WIDTH;
+            const evKellyTarget = Math.ceil(Math.max(betSizeHeaderWidth, evHeaderWidth, EV_KELLY_COLUMN_MIN_WIDTH));
+            evKellyCluster.forEach(field => {
+                const col = this.table.getColumn(field);
+                if (col) col.setWidth(evKellyTarget);
+            });
+            
+            console.log(`NHL Game Odds Mobile equalized odds to ${targetWidth}px, EV/Kelly to ${evKellyTarget}px`);
+        } else {
+            // DESKTOP: Use max of data width or header width
+            let maxOddsWidth = 0;
+            oddsCluster.forEach(field => {
+                const col = this.table.getColumn(field);
+                if (col && col.getWidth() > maxOddsWidth) maxOddsWidth = col.getWidth();
+            });
+            ['Book Odds', 'Median Odds', 'Best Odds'].forEach(title => {
+                const w = ctx.measureText(title).width + CELL_PADDING + SORT_ICON_WIDTH;
+                if (w > maxOddsWidth) maxOddsWidth = w;
+            });
+            oddsCluster.forEach(field => {
+                const col = this.table.getColumn(field);
+                if (col) col.setWidth(Math.ceil(maxOddsWidth));
+            });
+            
+            const evKellyCluster = ['EV %', 'Quarter Kelly %'];
+            let maxEvKellyWidth = EV_KELLY_COLUMN_MIN_WIDTH;
+            evKellyCluster.forEach(field => {
+                const col = this.table.getColumn(field);
+                if (col && col.getWidth() > maxEvKellyWidth) maxEvKellyWidth = col.getWidth();
+            });
+            evKellyCluster.forEach(field => {
+                const col = this.table.getColumn(field);
+                if (col) col.setWidth(Math.ceil(maxEvKellyWidth));
+            });
+            
+            console.log(`NHL Game Odds Equalized odds to ${Math.ceil(maxOddsWidth)}px, EV/Kelly to ${Math.ceil(maxEvKellyWidth)}px`);
+        }
     }
 
     getColumns(isSmallScreen = false) {
