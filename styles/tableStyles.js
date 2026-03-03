@@ -11,6 +11,10 @@
 // - FIXED: Removed font-weight: 600 and color: #333 from .tabulator-col-title
 //   NBA does NOT set these — Webflow provides header font-weight/color.
 //   Bold text is physically wider, causing headers to wrap inside minWidth columns on mobile.
+// - FIXED: Added blue theme gradient on frozen header column for mobile/tablet
+//   Previously missing — caused frozen header to have no background color on mobile
+// - FIXED: Added standalone header alignment block for mobile/tablet
+//   Previously missing — caused extraneous vertical space in NHL headers
 
 import { isMobile, isTablet, getDeviceScale } from '../shared/config.js';
 
@@ -41,30 +45,26 @@ function injectScrollbarFix() {
             }
             html body .tabulator .tabulator-tableholder::-webkit-scrollbar-track,
             html body div.tabulator div.tabulator-tableholder::-webkit-scrollbar-track {
-                display: block !important;
                 background: #f1f1f1 !important;
                 border-radius: 8px !important;
-                visibility: visible !important;
             }
             html body .tabulator .tabulator-tableholder::-webkit-scrollbar-thumb,
             html body div.tabulator div.tabulator-tableholder::-webkit-scrollbar-thumb {
-                display: block !important;
                 background: #888 !important;
                 border-radius: 8px !important;
                 border: 2px solid #f1f1f1 !important;
-                visibility: visible !important;
-                min-height: 40px !important;
             }
             html body .tabulator .tabulator-tableholder::-webkit-scrollbar-thumb:hover,
             html body div.tabulator div.tabulator-tableholder::-webkit-scrollbar-thumb:hover {
-                background: #666 !important;
+                background: #1e40af !important;
             }
             html body .tabulator .tabulator-tableholder,
             html body div.tabulator div.tabulator-tableholder {
                 scrollbar-width: thin !important;
-                scrollbar-color: #888 #f1f1f1 !important;
+                scrollbar-color: #2563eb #f1f1f1 !important;
             }
         }
+        
         @media screen and (max-width: 1024px) {
             html body .tabulator .tabulator-tableholder::-webkit-scrollbar,
             html body div.tabulator div.tabulator-tableholder::-webkit-scrollbar {
@@ -82,8 +82,10 @@ function injectScrollbarFix() {
             }
         }
     `;
+    
+    // Insert AFTER any Webflow styles
     const webflowStyle = document.querySelector('style[data-table-styles="webflow"]');
-    if (webflowStyle && webflowStyle.parentNode) {
+    if (webflowStyle && webflowStyle.nextSibling) {
         webflowStyle.parentNode.insertBefore(style, webflowStyle.nextSibling);
     } else {
         document.head.appendChild(style);
@@ -91,12 +93,14 @@ function injectScrollbarFix() {
 }
 
 /**
- * MINIMAL STYLES - Matches NBA injectMinimalStyles pattern.
+ * MINIMAL STYLES - For Webflow environments
  * NO header colors, NO row colors, NO cell padding, NO header font-weight/color.
  * Webflow provides all visual styling including header font-weight and color.
  * We only add technical layout fixes.
  */
 function injectMinimalStyles() {
+    if (document.querySelector('style[data-source="github-nhl-minimal"]')) return;
+    
     const style = document.createElement('style');
     style.setAttribute('data-source', 'github-nhl-minimal');
     style.textContent = `
@@ -181,7 +185,7 @@ function injectMinimalStyles() {
             background: white !important;
             border: 1px solid #333 !important;
             border-radius: 4px !important;
-            box-shadow: 0 -4px 12px rgba(0,0,0,0.15) !important;
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.3) !important;
         }
         
         /* Min/Max filter stacking */
@@ -208,6 +212,8 @@ function injectMinimalStyles() {
             text-align: center !important;
             box-sizing: border-box !important;
             -moz-appearance: textfield !important;
+            -webkit-appearance: none !important;
+            appearance: none !important;
         }
         
         .min-max-input::-webkit-outer-spin-button,
@@ -216,68 +222,59 @@ function injectMinimalStyles() {
             margin: 0 !important;
         }
         
-        /* Mobile header alignment */
-        @media screen and (max-width: 1024px) {
-            .tabulator-header {
-                display: flex !important;
-                align-items: stretch !important;
-            }
-            .tabulator-headers {
-                display: flex !important;
-                align-items: stretch !important;
-            }
-            .tabulator-headers > .tabulator-col {
-                display: flex !important;
-                flex-direction: column !important;
-            }
-            .tabulator-col.standalone-header {
-                justify-content: flex-start !important;
-            }
-            .tabulator-col.standalone-header > .tabulator-col-content {
-                display: flex !important;
-                flex-direction: column !important;
-                justify-content: flex-start !important;
-                align-items: center !important;
-                height: 100% !important;
-                padding-top: 6px !important;
-            }
-            .tabulator-col:not(.tabulator-col-group) .tabulator-col-title {
-                text-align: center !important;
-                padding-top: 4px !important;
-            }
-            .tabulator-header .tabulator-col.tabulator-frozen {
-                z-index: 100 !important;
-            }
+        .min-max-input:focus {
+            outline: none !important;
+            border-color: #1e40af !important;
+            box-shadow: 0 0 0 1px rgba(30, 64, 175, 0.2) !important;
         }
         
-        /* Base overflow for tableholder */
-        .tabulator .tabulator-tableholder {
-            overflow-y: auto !important;
-            overflow-x: auto !important;
+        /* Bankroll input styling */
+        .bankroll-input-container {
+            display: flex !important;
+            align-items: center !important;
+            gap: 2px !important;
+            max-width: 60px !important;
+            margin: 0 auto !important;
         }
         
-        /* Frozen cell backgrounds — ALL screen sizes */
-        .tabulator-frozen {
-            z-index: 11 !important;
-        }
-        .tabulator-frozen.tabulator-frozen-left {
-            border-right: 2px solid rgba(30, 64, 175, 0.4) !important;
-            box-shadow: 2px 0 4px rgba(0,0,0,0.08) !important;
-        }
-        .tabulator-header .tabulator-frozen {
-            z-index: 100 !important;
-        }
-        .tabulator-row .tabulator-frozen {
-            background-color: white !important;
-        }
-        .tabulator-row:nth-child(even) .tabulator-frozen {
-            background-color: #f5f5f5 !important;
-        }
-        .tabulator-row:hover .tabulator-frozen {
-            background-color: #eff6ff !important;
+        .bankroll-input-container input {
+            width: 100% !important;
+            padding: 2px 3px !important;
+            font-size: 9px !important;
+            border: 1px solid #ccc !important;
+            border-radius: 2px !important;
+            text-align: center !important;
+            box-sizing: border-box !important;
         }
         
-        /* Desktop: grey background fills empty space */
+        /* Text search input */
+        .tabulator-header-filter input[type="search"],
+        .tabulator-header-filter input[type="text"] {
+            width: 100% !important;
+            padding: 4px 6px !important;
+            font-size: 11px !important;
+            border: 1px solid #ccc !important;
+            border-radius: 3px !important;
+            box-sizing: border-box !important;
+        }
+        
+        /* Frozen column backgrounds on ALL screen sizes */
+        .tabulator-row .tabulator-cell.tabulator-frozen {
+            position: sticky !important;
+            left: 0 !important;
+            z-index: 10 !important;
+        }
+        .tabulator-row.tabulator-row-even .tabulator-cell.tabulator-frozen {
+            background: #fafafa !important;
+        }
+        .tabulator-row.tabulator-row-odd .tabulator-cell.tabulator-frozen {
+            background: #ffffff !important;
+        }
+        .tabulator-row:hover .tabulator-cell.tabulator-frozen {
+            background: #eff6ff !important;
+        }
+        
+        /* DESKTOP: Grey background fills empty space */
         @media screen and (min-width: 1025px) {
             .table-container {
                 background: #e8e8e8 !important;
@@ -292,6 +289,52 @@ function injectMinimalStyles() {
                 background-color: #e8e8e8 !important;
                 overflow-y: scroll !important;
                 overflow-x: auto !important;
+            }
+        }
+        
+        /* =====================================================
+           STANDALONE HEADER ALIGNMENT (mobile/tablet)
+           Compresses header vertical space by top-aligning
+           standalone columns (Name, Team, Prop, etc.)
+           PREVIOUSLY MISSING — caused extraneous vertical space
+           ===================================================== */
+        @media screen and (max-width: 1024px) {
+            .tabulator-header {
+                display: flex !important;
+                align-items: stretch !important;
+            }
+            
+            .tabulator-header > .tabulator-headers > .tabulator-col {
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: stretch !important;
+            }
+            
+            .tabulator-col:not(.tabulator-col-group) > .tabulator-col-content {
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: flex-start !important;
+                align-items: center !important;
+                height: 100% !important;
+                padding-top: 8px !important;
+            }
+            
+            .tabulator-col:not(.tabulator-col-group) .tabulator-col-title {
+                text-align: center !important;
+                padding-top: 4px !important;
+            }
+            
+            /* =====================================================
+               FROZEN HEADER THEME COLOR (mobile/tablet)
+               Blue gradient on frozen header column
+               PREVIOUSLY MISSING — caused plain/white frozen header
+               ===================================================== */
+            .tabulator-header .tabulator-frozen {
+                background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
+                z-index: 100 !important;
+            }
+            .tabulator-header .tabulator-col.tabulator-frozen {
+                background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
             }
         }
         
@@ -331,7 +374,7 @@ function injectMinimalStyles() {
         }
     `;
     document.head.appendChild(style);
-    console.log('NHL minimal styles injected (matching NBA: no header font-weight/color override)');
+    console.log('NHL minimal styles injected (with frozen header blue theme + standalone header alignment fix)');
 }
 
 /**
@@ -377,67 +420,53 @@ function injectFullStyles() {
             display: flex !important; align-items: center !important;
             justify-content: center !important; padding: 4px 2px !important;
         }
-        .tabulator-col .tabulator-col-sorter .tabulator-arrow {
-            border-bottom-color: rgba(255,255,255,0.7) !important;
-        }
-        .tabulator-col-group-cols {
-            border-top: 1px solid rgba(255,255,255,0.3);
-        }
-        .tabulator-row {
-            border-bottom: 1px solid #e8e8e8;
-            min-height: 32px;
-        }
-        .tabulator-row:nth-child(even) {
-            background-color: #fafafa;
-        }
-        .tabulator-row:hover {
-            background-color: #eff6ff;
-        }
+        .tabulator-row { background-color: #ffffff; }
+        .tabulator-row:nth-child(even) { background-color: #f8f9fa; }
+        .tabulator-row:hover { background-color: #eff6ff; }
         .tabulator-cell {
-            padding: 6px 4px;
-            border-right: 1px solid #f0f0f0;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
+            white-space: nowrap !important; overflow: hidden !important;
+            text-overflow: ellipsis !important; text-align: center;
+            border-right: 1px solid #e8e8e8; padding: 6px 4px !important;
         }
-        /* Header filter inputs: bold dark text */
-        .tabulator-header-filter input[type="search"],
-        .tabulator-header-filter input[type="text"],
-        .tabulator-header-filter input[type="number"],
-        .tabulator-header-filter input {
-            font-weight: 700 !important;
-            color: #111 !important;
+        
+        /* Dropdowns */
+        .custom-multiselect-dropdown, [id^="dropdown_"] {
+            z-index: 2147483647 !important; position: fixed !important;
+            background: white !important; border: 1px solid #333 !important;
+            border-radius: 4px !important; box-shadow: 0 -4px 12px rgba(0,0,0,0.3) !important;
         }
-        .min-max-input,
-        .min-max-filter-container input {
-            font-weight: 700 !important;
-            color: #111 !important;
+        .custom-multiselect-button {
+            width: 100%; padding: 4px 8px; border: 1px solid #ccc;
+            background: white; cursor: pointer; font-size: 11px !important;
+            text-align: center; white-space: nowrap; overflow: hidden;
+            text-overflow: ellipsis; border-radius: 3px; transition: border-color 0.2s ease;
         }
-        .bankroll-input,
-        .bankroll-input-field,
-        .bankroll-input-container input {
-            font-weight: 700 !important;
-            color: #111 !important;
+        .custom-multiselect-button:hover { border-color: #1e40af; }
+        .custom-multiselect-button:focus {
+            outline: none; border-color: #1e40af;
+            box-shadow: 0 0 0 2px rgba(30, 64, 175, 0.2);
         }
-        .custom-multiselect-button,
-        .tabulator-header-filter .custom-multiselect-button,
-        .tabulator-header-filter button {
-            font-weight: 700 !important;
-            color: #111 !important;
+        
+        /* Frozen columns */
+        .tabulator-frozen {
+            position: sticky !important; left: 0 !important;
+            z-index: 10 !important; background: white !important;
         }
         .tabulator-frozen.tabulator-frozen-left {
-            border-right: 2px solid rgba(30, 64, 175, 0.4) !important;
-            box-shadow: 2px 0 4px rgba(0,0,0,0.08) !important;
+            border-right: 1px solid rgba(30, 64, 175, 0.4) !important;
+            box-shadow: 1px 0 3px rgba(0,0,0,0.05) !important;
         }
         .tabulator-header .tabulator-frozen {
             background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
             z-index: 100 !important;
         }
-        /* Frozen cell backgrounds - explicit white base, no inherit */
-        .tabulator-row .tabulator-frozen { background-color: white !important; }
-        .tabulator-row:nth-child(even) .tabulator-frozen { background-color: #f5f5f5 !important; }
-        .tabulator-row:hover .tabulator-frozen { background-color: #eff6ff !important; }
-        .min-max-filter-container, .tabulator .min-max-filter-container,
+        .tabulator-row .tabulator-frozen { background: inherit !important; }
+        .tabulator-row:nth-child(even) .tabulator-frozen { background: #fafafa !important; }
+        .tabulator-row:hover .tabulator-frozen { background: #eff6ff !important; }
+        
+        /* Min/Max filters */
+        .min-max-filter-container,
+        .tabulator .min-max-filter-container,
         .tabulator-header .min-max-filter-container,
         .tabulator-header-filter .min-max-filter-container {
             display: flex !important; flex-direction: column !important;
@@ -449,7 +478,7 @@ function injectFullStyles() {
             padding: 2px 3px !important; font-size: 9px !important;
             border: 1px solid #ccc !important; border-radius: 2px !important;
             text-align: center !important; box-sizing: border-box !important;
-            -moz-appearance: textfield !important;
+            -moz-appearance: textfield !important; -webkit-appearance: none !important;
         }
         .min-max-input::-webkit-outer-spin-button,
         .min-max-input::-webkit-inner-spin-button {
@@ -459,35 +488,63 @@ function injectFullStyles() {
             outline: none !important; border-color: #1e40af !important;
             box-shadow: 0 0 0 1px rgba(30, 64, 175, 0.2) !important;
         }
-        .custom-multiselect-dropdown, [id^="dropdown_"] {
-            z-index: 2147483647 !important;
-            position: fixed !important;
-            background: white !important;
-            border: 1px solid #333 !important;
-            border-radius: 4px !important;
-            box-shadow: 0 -4px 12px rgba(0,0,0,0.15) !important;
+        
+        /* Bankroll input */
+        .bankroll-input-container {
+            display: flex !important; align-items: center !important;
+            gap: 2px !important; max-width: 60px !important; margin: 0 auto !important;
         }
+        .bankroll-input-container input {
+            width: 100% !important; padding: 2px 3px !important;
+            font-size: 9px !important; border: 1px solid #ccc !important;
+            border-radius: 2px !important; text-align: center !important;
+            box-sizing: border-box !important;
+        }
+        
+        /* Text search input */
+        .tabulator-header-filter input[type="search"],
+        .tabulator-header-filter input[type="text"] {
+            width: 100% !important; padding: 4px 6px !important;
+            font-size: 11px !important; border: 1px solid #ccc !important;
+            border-radius: 3px !important; box-sizing: border-box !important;
+        }
+        
+        /* =====================================================
+           STANDALONE HEADER ALIGNMENT (mobile/tablet)
+           ===================================================== */
         @media screen and (max-width: 1024px) {
-            .tabulator-header { display: flex !important; align-items: stretch !important; }
-            .tabulator-headers { display: flex !important; align-items: stretch !important; }
-            .tabulator-headers > .tabulator-col { display: flex !important; flex-direction: column !important; }
-            .tabulator-col.standalone-header { justify-content: flex-start !important; }
-            .tabulator-col.standalone-header > .tabulator-col-content {
-                display: flex !important; flex-direction: column !important;
-                justify-content: flex-start !important; align-items: center !important;
-                height: 100% !important; padding-top: 6px !important;
+            .tabulator-header {
+                display: flex !important;
+                align-items: stretch !important;
+            }
+            .tabulator-header > .tabulator-headers > .tabulator-col {
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: stretch !important;
+            }
+            .tabulator-col:not(.tabulator-col-group) > .tabulator-col-content {
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: flex-start !important;
+                align-items: center !important;
+                height: 100% !important;
+                padding-top: 8px !important;
             }
             .tabulator-col:not(.tabulator-col-group) .tabulator-col-title {
-                text-align: center !important; padding-top: 4px !important;
+                text-align: center !important;
+                padding-top: 4px !important;
             }
+            /* Frozen header — blue theme */
             .tabulator-header .tabulator-frozen {
                 background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
                 z-index: 100 !important;
             }
+            .tabulator-header .tabulator-col.tabulator-frozen {
+                background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
+            }
         }
-        .tabulator .tabulator-tableholder {
-            overflow-y: auto !important; overflow-x: auto !important;
-        }
+        
+        /* Mobile frozen column constraints */
         @media screen and (max-width: 1024px) {
             .table-container {
                 width: 100% !important; max-width: 100vw !important;
