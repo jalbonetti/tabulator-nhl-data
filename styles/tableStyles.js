@@ -347,6 +347,21 @@ function injectMinimalStyles() {
             .tabulator-header .tabulator-col.tabulator-frozen {
                 background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
             }
+            /* Frozen header text must be white against the dark blue background */
+            .tabulator-header .tabulator-frozen .tabulator-col-title,
+            .tabulator-header .tabulator-col.tabulator-frozen .tabulator-col-title {
+                color: #ffffff !important;
+            }
+            .tabulator-header .tabulator-frozen .tabulator-col-content,
+            .tabulator-header .tabulator-col.tabulator-frozen .tabulator-col-content {
+                color: #ffffff !important;
+            }
+            /* Frozen header filter input stays dark text on white background */
+            .tabulator-header .tabulator-frozen input,
+            .tabulator-header .tabulator-col.tabulator-frozen input {
+                color: #111 !important;
+                background: #ffffff !important;
+            }
         }
         
         /* Mobile: frozen column constraints */
@@ -559,6 +574,15 @@ function injectFullStyles() {
             }
             .tabulator-header .tabulator-col.tabulator-frozen {
                 background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
+            }
+            .tabulator-header .tabulator-frozen .tabulator-col-title,
+            .tabulator-header .tabulator-col.tabulator-frozen .tabulator-col-title {
+                color: #ffffff !important;
+            }
+            .tabulator-header .tabulator-frozen input,
+            .tabulator-header .tabulator-col.tabulator-frozen input {
+                color: #111 !important;
+                background: #ffffff !important;
             }
         }
         
