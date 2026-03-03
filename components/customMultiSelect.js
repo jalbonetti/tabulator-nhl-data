@@ -1,7 +1,8 @@
 // components/customMultiSelect.js - Custom Multi-Select Dropdown Filter for Tabulator
-// NHL version - Blue theme (#1e40af)
+// DIRECT COPY of CBB/WCBB version with color change to NHL blue (#1e40af)
 // Dropdowns open ABOVE the table header
 // Includes state sync, debounced filter updates
+// No expandable rows (simplified saveExpandedState/restoreExpandedState)
 
 export function createCustomMultiSelect(cell, onRendered, success, cancel, options = {}) {
     const dropdownWidth = options.dropdownWidth || 200;
@@ -56,230 +57,366 @@ export function createCustomMultiSelect(cell, onRendered, success, cancel, optio
         dropdown.className = "custom-multiselect-dropdown";
         dropdown.style.cssText = `
             position: fixed;
-            width: ${dropdownWidth}px;
-            max-height: 250px;
-            overflow-y: auto;
             background: white;
             border: 1px solid #333;
-            border-radius: 4px;
-            box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
+            min-width: ${dropdownWidth}px;
+            max-width: ${Math.max(dropdownWidth, 300)}px;
+            max-height: 300px;
+            overflow-y: auto;
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.3);
             z-index: 2147483647;
-            padding: 5px;
+            display: none;
+            padding: 0;
+            border-radius: 4px;
         `;
-        
-        // Position ABOVE the button
-        var rect = button.getBoundingClientRect();
-        dropdown.style.left = rect.left + 'px';
-        dropdown.style.bottom = (window.innerHeight - rect.top + 2) + 'px';
-        
-        // Select All / Clear All buttons
-        var controls = document.createElement("div");
-        controls.style.cssText = `
-            display: flex;
-            justify-content: space-between;
-            padding: 4px;
-            border-bottom: 1px solid #eee;
-            margin-bottom: 4px;
-        `;
-        
-        var selectAll = document.createElement("button");
-        selectAll.textContent = "All";
-        selectAll.style.cssText = `
-            padding: 2px 8px;
-            font-size: 10px;
-            cursor: pointer;
-            background: #1e40af;
-            color: white;
-            border: none;
-            border-radius: 3px;
-        `;
-        selectAll.addEventListener("click", function(e) {
-            e.stopPropagation();
-            selectedValues = [...allValues];
-            updateCheckboxes(dropdown);
-            applyFilterDebounced();
-        });
-        
-        var clearAll = document.createElement("button");
-        clearAll.textContent = "Clear";
-        clearAll.style.cssText = `
-            padding: 2px 8px;
-            font-size: 10px;
-            cursor: pointer;
-            background: #dc2626;
-            color: white;
-            border: none;
-            border-radius: 3px;
-        `;
-        clearAll.addEventListener("click", function(e) {
-            e.stopPropagation();
-            selectedValues = [];
-            updateCheckboxes(dropdown);
-            applyFilterDebounced();
-        });
-        
-        controls.appendChild(selectAll);
-        controls.appendChild(clearAll);
-        dropdown.appendChild(controls);
-        
-        // Create checkboxes for each value
-        allValues.forEach(function(value) {
-            var label = document.createElement("label");
-            label.style.cssText = `
-                display: flex;
-                align-items: center;
-                padding: 3px 5px;
-                cursor: pointer;
-                font-size: 11px;
-                gap: 6px;
-            `;
-            label.addEventListener("mouseover", function() { this.style.background = '#eff6ff'; });
-            label.addEventListener("mouseout", function() { this.style.background = 'transparent'; });
-            
-            var checkbox = document.createElement("input");
-            checkbox.type = "checkbox";
-            checkbox.value = value;
-            checkbox.checked = selectedValues.includes(value);
-            checkbox.style.cssText = `
-                margin: 0;
-                cursor: pointer;
-                accent-color: #1e40af;
-            `;
-            
-            checkbox.addEventListener("change", function(e) {
-                e.stopPropagation();
-                if (this.checked) {
-                    if (!selectedValues.includes(value)) {
-                        selectedValues.push(value);
-                    }
-                } else {
-                    selectedValues = selectedValues.filter(function(v) { return v !== value; });
-                }
-                applyFilterDebounced();
-            });
-            
-            var text = document.createElement("span");
-            text.textContent = value;
-            text.style.cssText = `
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-            `;
-            
-            label.appendChild(checkbox);
-            label.appendChild(text);
-            dropdown.appendChild(label);
-        });
         
         document.body.appendChild(dropdown);
-        
-        // Reposition to ensure visibility
-        setTimeout(function() {
-            var dropRect = dropdown.getBoundingClientRect();
-            if (dropRect.top < 0) {
-                dropdown.style.bottom = 'auto';
-                dropdown.style.top = (rect.bottom + 2) + 'px';
-            }
-            if (dropRect.right > window.innerWidth) {
-                dropdown.style.left = (window.innerWidth - dropdownWidth - 10) + 'px';
-            }
-        }, 0);
-        
         return dropdown;
     }
     
-    function updateCheckboxes(dropdown) {
-        if (!dropdown) return;
-        var checkboxes = dropdown.querySelectorAll('input[type="checkbox"]');
-        checkboxes.forEach(function(cb) {
-            cb.checked = selectedValues.includes(cb.value);
-        });
+    // Optimized filter function with debouncing
+    function customFilterFunction(headerValue, rowValue, rowData, filterParams) {
+        if (!headerValue) return true;
+        var rowValueStr = String(rowValue || '');
+        if (headerValue === "IMPOSSIBLE_VALUE_THAT_MATCHES_NOTHING") return false;
+        if (Array.isArray(headerValue)) return headerValue.indexOf(rowValueStr) !== -1;
+        return rowValueStr === String(headerValue);
     }
     
-    function updateButtonText() {
-        if (selectedValues.length === 0 || selectedValues.length === allValues.length) {
-            button.textContent = "All";
-            button.style.fontWeight = "normal";
-        } else if (selectedValues.length === 1) {
-            button.textContent = selectedValues[0];
-            button.style.fontWeight = "500";
-        } else {
-            button.textContent = selectedValues.length + " selected";
-            button.style.fontWeight = "500";
+    // Set the custom filter function on the column
+    column.getDefinition().headerFilterFunc = customFilterFunction;
+    
+    // Debounced filter update with state preservation
+    function updateFilter() {
+        if (filterTimeout) {
+            clearTimeout(filterTimeout);
         }
-    }
-    
-    function applyFilterDebounced() {
-        if (filterTimeout) clearTimeout(filterTimeout);
-        filterTimeout = setTimeout(function() {
-            var expandedRows = saveExpandedState();
-            updateButtonText();
-            success(selectedValues.length > 0 && selectedValues.length < allValues.length ? selectedValues : null);
-            restoreExpandedState(expandedRows);
+        
+        const expandedState = saveExpandedState();
+        
+        filterTimeout = setTimeout(() => {
+            console.log("Updating filter for", field, "- selected:", selectedValues.length, "of", allValues.length);
+            
+            if (selectedValues.length === 0) {
+                success("IMPOSSIBLE_VALUE_THAT_MATCHES_NOTHING");
+            } else if (selectedValues.length === allValues.length) {
+                success("");
+            } else {
+                success([...selectedValues]);
+            }
+            
+            restoreExpandedState(expandedState);
         }, 150);
     }
     
-    function toggleDropdown(e) {
-        e.stopPropagation();
-        if (isOpen) {
-            closeDropdown();
-        } else {
-            openDropdown();
+    // Check for existing filter value and sync with it
+    function getCurrentFilterValue() {
+        const headerFilters = table.getHeaderFilters();
+        const currentFilter = headerFilters.find(f => f.field === field);
+        
+        if (currentFilter && currentFilter.value) {
+            if (currentFilter.value === "IMPOSSIBLE_VALUE_THAT_MATCHES_NOTHING") {
+                return [];
+            } else if (Array.isArray(currentFilter.value)) {
+                return currentFilter.value.map(v => String(v));
+            } else if (currentFilter.value === "") {
+                return null;
+            } else {
+                return [String(currentFilter.value)];
+            }
+        }
+        
+        return null;
+    }
+    
+    // Load values with filter state sync
+    function loadValues() {
+        if (!isInitialized) {
+            var uniqueValues = new Set();
+            var data = table.getData();
+            
+            for (var i = 0; i < data.length; i++) {
+                var value = data[i][field];
+                if (value !== null && value !== undefined && value !== '') {
+                    uniqueValues.add(String(value));
+                }
+            }
+            
+            allValues = Array.from(uniqueValues);
+            
+            // Sort numerically for prop value fields
+            if (field === "Player Prop Value") {
+                allValues.sort(function(a, b) {
+                    return parseFloat(a) - parseFloat(b);
+                });
+            } else {
+                allValues.sort();
+            }
+            
+            // Check for existing filter and sync selected values
+            const existingFilter = getCurrentFilterValue();
+            
+            if (existingFilter !== null) {
+                selectedValues = existingFilter;
+                console.log(`Synced with existing filter for ${field}: ${selectedValues.length} of ${allValues.length} selected`);
+            } else {
+                selectedValues = [...allValues];
+            }
+            
+            isInitialized = true;
+            updateButtonText();
+            
+            console.log(`Loaded ${allValues.length} unique values for ${field}`);
         }
     }
     
-    function openDropdown() {
-        createDropdown();
+    function updateButtonText() {
+        if (selectedValues.length === 0) {
+            button.textContent = "None";
+            button.style.color = "#999";
+        } else if (selectedValues.length === allValues.length) {
+            button.textContent = "All";
+            button.style.color = "#333";
+        } else {
+            button.textContent = selectedValues.length + " of " + allValues.length;
+            button.style.color = "#1e40af";
+        }
+    }
+    
+    function createOptionElement(value, isSelectAll = false) {
+        var optionDiv = document.createElement('div');
+        optionDiv.style.cssText = `
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            border-bottom: 1px solid #eee;
+            background: white;
+            transition: background 0.15s ease;
+        `;
+        
+        var checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.style.cssText = 'margin: 0; cursor: pointer;';
+        
+        var label = document.createElement('span');
+        label.textContent = isSelectAll ? (selectedValues.length === allValues.length ? 'Deselect All' : 'Select All') : value;
+        label.style.cssText = isSelectAll ? 'font-weight: 600; color: #1e40af;' : '';
+        
+        if (isSelectAll) {
+            checkbox.checked = selectedValues.length === allValues.length;
+        } else {
+            checkbox.checked = selectedValues.indexOf(value) !== -1;
+        }
+        
+        optionDiv.appendChild(checkbox);
+        optionDiv.appendChild(label);
+        
+        optionDiv.addEventListener('click', function(e) {
+            e.stopPropagation();
+            
+            if (isSelectAll) {
+                if (selectedValues.length === allValues.length) {
+                    selectedValues = [];
+                } else {
+                    selectedValues = [...allValues];
+                }
+                // Re-render dropdown to update all checkboxes
+                renderDropdown();
+            } else {
+                var idx = selectedValues.indexOf(value);
+                if (idx !== -1) {
+                    selectedValues.splice(idx, 1);
+                } else {
+                    selectedValues.push(value);
+                }
+                checkbox.checked = selectedValues.indexOf(value) !== -1;
+                
+                // Update select all checkbox
+                var selectAllCheckbox = dropdown.querySelector('input[type="checkbox"]');
+                if (selectAllCheckbox) {
+                    selectAllCheckbox.checked = selectedValues.length === allValues.length;
+                    var selectAllLabel = selectAllCheckbox.parentNode.querySelector('span');
+                    if (selectAllLabel) {
+                        selectAllLabel.textContent = selectedValues.length === allValues.length ? 'Deselect All' : 'Select All';
+                    }
+                }
+            }
+            
+            updateButtonText();
+            updateFilter();
+        });
+        
+        optionDiv.addEventListener('mouseenter', function() {
+            optionDiv.style.background = '#f5f5f5';
+        });
+        
+        optionDiv.addEventListener('mouseleave', function() {
+            optionDiv.style.background = 'white';
+        });
+        
+        return optionDiv;
+    }
+    
+    var dropdown = createDropdown();
+    
+    function renderDropdown() {
+        dropdown.innerHTML = '';
+        
+        // Add select all option
+        dropdown.appendChild(createOptionElement(null, true));
+        
+        // Add separator
+        var separator = document.createElement('div');
+        separator.style.cssText = 'height: 1px; background: #ccc; margin: 0;';
+        dropdown.appendChild(separator);
+        
+        // Add individual options
+        allValues.forEach(function(value) {
+            dropdown.appendChild(createOptionElement(value, false));
+        });
+    }
+    
+    function showDropdown() {
+        renderDropdown();
+        
+        var buttonRect = button.getBoundingClientRect();
+        
+        // Position dropdown ABOVE the button (opens upward)
+        dropdown.style.display = 'block';
+        
+        var dropdownHeight = Math.min(300, dropdown.scrollHeight);
+        var topPosition = buttonRect.top - dropdownHeight - 2;
+        
+        // If not enough space above, position below (fallback)
+        if (topPosition < 10) {
+            topPosition = buttonRect.bottom + 2;
+        }
+        
+        dropdown.style.left = buttonRect.left + 'px';
+        dropdown.style.top = topPosition + 'px';
+        dropdown.style.width = Math.max(dropdownWidth, buttonRect.width) + 'px';
+        
+        // Ensure dropdown doesn't go off screen horizontally
+        var dropdownRect = dropdown.getBoundingClientRect();
+        if (dropdownRect.right > window.innerWidth - 10) {
+            dropdown.style.left = (window.innerWidth - dropdown.offsetWidth - 10) + 'px';
+        }
+        
         isOpen = true;
     }
     
-    function closeDropdown() {
-        var dropdown = document.getElementById(dropdownId);
-        if (dropdown) dropdown.remove();
+    function hideDropdown() {
+        dropdown.style.display = 'none';
         isOpen = false;
     }
     
-    // Close on outside click
-    document.addEventListener("click", function(e) {
-        if (isOpen && !button.contains(e.target)) {
-            var dropdown = document.getElementById(dropdownId);
-            if (dropdown && !dropdown.contains(e.target)) {
-                closeDropdown();
+    // Close handler for clicking outside
+    var closeHandler = function(e) {
+        if (!dropdown.contains(e.target) && !button.contains(e.target)) {
+            hideDropdown();
+        }
+    };
+    
+    document.addEventListener('click', closeHandler);
+    
+    // Button click handler
+    button.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Close other dropdowns
+        document.querySelectorAll('[id^="dropdown_"]').forEach(function(otherDropdown) {
+            if (otherDropdown.id !== dropdownId) {
+                otherDropdown.style.display = 'none';
+            }
+        });
+        
+        if (isOpen) {
+            hideDropdown();
+        } else {
+            if (!isInitialized) {
+                loadValues();
+            }
+            showDropdown();
+        }
+    });
+    
+    // Initial load with filter state check
+    var initialLoadComplete = false;
+    
+    var tryLoad = function() {
+        loadAttempts++;
+        
+        var data = table.getData();
+        if (data && data.length > 0) {
+            loadValues();
+            if (!initialLoadComplete) {
+                initialLoadComplete = true;
+                
+                if (selectedValues.length !== allValues.length) {
+                    updateFilter();
+                }
+            }
+        } else if (loadAttempts < 5) {
+            setTimeout(tryLoad, 500);
+        }
+    };
+    
+    // Defer initial load to avoid blocking
+    requestAnimationFrame(() => {
+        tryLoad();
+    });
+    
+    // Listen for table events
+    table.on("dataLoaded", function() {
+        if (!isInitialized) {
+            setTimeout(function() {
+                loadValues();
+                const existingFilter = getCurrentFilterValue();
+                if (existingFilter === null && selectedValues.length !== allValues.length) {
+                    updateFilter();
+                }
+            }, 100);
+        }
+    });
+    
+    // Listen for filter changes from other sources (like state restoration)
+    table.on("dataFiltered", function() {
+        if (isInitialized) {
+            const currentFilter = getCurrentFilterValue();
+            if (currentFilter !== null) {
+                const currentSet = new Set(currentFilter);
+                const selectedSet = new Set(selectedValues);
+                
+                if (currentSet.size !== selectedSet.size || 
+                    [...currentSet].some(v => !selectedSet.has(v))) {
+                    console.log(`External filter change detected for ${field}, syncing...`);
+                    selectedValues = currentFilter;
+                    updateButtonText();
+                }
             }
         }
     });
     
-    button.addEventListener("click", toggleDropdown);
-    
-    // Load values from table data
-    function loadValues() {
-        loadAttempts++;
-        var data = table.getData();
-        
-        if (data.length === 0 && loadAttempts < 10) {
-            setTimeout(loadValues, 500);
-            return;
+    // Cleanup
+    var cleanup = function() {
+        var dropdown = document.getElementById(dropdownId);
+        if (dropdown) {
+            dropdown.remove();
         }
-        
-        var values = data.map(function(row) { return row[field]; });
-        allValues = [...new Set(values)].filter(function(v) { return v != null && v !== ''; }).sort();
-        
-        selectedValues = [...allValues];
-        isInitialized = true;
-        updateButtonText();
-    }
-    
-    onRendered(function() {
-        setTimeout(loadValues, 300);
-    });
+        document.removeEventListener('click', closeHandler);
+        if (filterTimeout) {
+            clearTimeout(filterTimeout);
+        }
+        if (clickTimeout) {
+            clearTimeout(clickTimeout);
+        }
+    };
     
     return button;
 }
 
-// Custom filter function for multi-select
-export function customMultiSelectFilterFunction(headerValue, rowValue, rowData, filterParams) {
-    if (!headerValue || !Array.isArray(headerValue) || headerValue.length === 0) return true;
-    return headerValue.includes(rowValue);
-}
-
-export default createCustomMultiSelect;
+export default { createCustomMultiSelect };
