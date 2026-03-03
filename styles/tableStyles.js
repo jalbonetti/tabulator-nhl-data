@@ -354,17 +354,24 @@ function injectMinimalStyles() {
                 overflow-x: auto !important;
                 -webkit-overflow-scrolling: touch !important;
             }
+            /* Frozen cells inherit row background — matches NBA pattern */
             .tabulator-row .tabulator-cell.tabulator-frozen {
+                background: inherit !important;
                 position: sticky !important;
                 left: 0 !important;
                 z-index: 10 !important;
-                background-color: white !important;
             }
-            .tabulator-row:nth-child(even) .tabulator-cell.tabulator-frozen {
-                background-color: #f5f5f5 !important;
+            /* Even rows — use class selector (not :nth-child) to match Webflow */
+            .tabulator-row.tabulator-row-even .tabulator-cell.tabulator-frozen {
+                background: #fafafa !important;
             }
+            /* Odd rows */
+            .tabulator-row.tabulator-row-odd .tabulator-cell.tabulator-frozen {
+                background: #ffffff !important;
+            }
+            /* Hover */
             .tabulator-row:hover .tabulator-cell.tabulator-frozen {
-                background-color: #eff6ff !important;
+                background: #eff6ff !important;
             }
             .tabulator-header .tabulator-col.tabulator-frozen {
                 position: sticky !important;
@@ -558,11 +565,12 @@ function injectFullStyles() {
                 overflow-x: auto !important; -webkit-overflow-scrolling: touch !important;
             }
             .tabulator-row .tabulator-cell.tabulator-frozen {
-                background-color: white !important; position: sticky !important;
+                background: inherit !important; position: sticky !important;
                 left: 0 !important; z-index: 10 !important;
             }
-            .tabulator-row:nth-child(even) .tabulator-cell.tabulator-frozen { background-color: #f5f5f5 !important; }
-            .tabulator-row:hover .tabulator-cell.tabulator-frozen { background-color: #eff6ff !important; }
+            .tabulator-row.tabulator-row-even .tabulator-cell.tabulator-frozen { background: #fafafa !important; }
+            .tabulator-row.tabulator-row-odd .tabulator-cell.tabulator-frozen { background: #ffffff !important; }
+            .tabulator-row:hover .tabulator-cell.tabulator-frozen { background: #eff6ff !important; }
             .tabulator-header .tabulator-col.tabulator-frozen {
                 position: sticky !important; left: 0 !important; z-index: 101 !important;
             }
