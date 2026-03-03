@@ -260,17 +260,28 @@ function injectMinimalStyles() {
         
         /* Frozen column backgrounds on ALL screen sizes */
         .tabulator-row .tabulator-cell.tabulator-frozen {
+            background: inherit !important;
             position: sticky !important;
             left: 0 !important;
             z-index: 10 !important;
         }
-        .tabulator-row.tabulator-row-even .tabulator-cell.tabulator-frozen {
+        .tabulator-row .tabulator-frozen {
+            background: inherit !important;
+        }
+        .tabulator-row.tabulator-row-even .tabulator-cell.tabulator-frozen,
+        .tabulator-row:nth-child(even) .tabulator-cell.tabulator-frozen,
+        .tabulator-row.tabulator-row-even .tabulator-frozen,
+        .tabulator-row:nth-child(even) .tabulator-frozen {
             background: #fafafa !important;
         }
-        .tabulator-row.tabulator-row-odd .tabulator-cell.tabulator-frozen {
+        .tabulator-row.tabulator-row-odd .tabulator-cell.tabulator-frozen,
+        .tabulator-row:nth-child(odd) .tabulator-cell.tabulator-frozen,
+        .tabulator-row.tabulator-row-odd .tabulator-frozen,
+        .tabulator-row:nth-child(odd) .tabulator-frozen {
             background: #ffffff !important;
         }
-        .tabulator-row:hover .tabulator-cell.tabulator-frozen {
+        .tabulator-row:hover .tabulator-cell.tabulator-frozen,
+        .tabulator-row:hover .tabulator-frozen {
             background: #eff6ff !important;
         }
         
