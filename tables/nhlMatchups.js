@@ -29,7 +29,7 @@ const SPREAD_TOTAL_WIDTH = 250;
 
 export class NHLMatchupsTable extends BaseTable {
     constructor(elementId) {
-        super(elementId, 'HockeyMatchups');
+        super(elementId, 'HockeyMatchupsGame');
         this._stylesInjected = false;
     }
 
