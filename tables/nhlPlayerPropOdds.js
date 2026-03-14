@@ -11,6 +11,10 @@
 //
 // MOBILE FIX: Container-specific CSS overrides remove the blanket max-width:100%.
 // Header titles use white-space:nowrap.
+//
+// FIXES APPLIED:
+// - Mobile tableholder overflow-x changed from 'visible' to 'auto' to enable frozen Name column
+// - EV_KELLY_COLUMN_MIN_WIDTH increased from 65 to 80 to fit bankroll input without clipping
 
 import { BaseTable } from './baseTable.js';
 import { createCustomMultiSelect } from '../components/customMultiSelect.js';
@@ -19,7 +23,7 @@ import { createBankrollInput, bankrollFilterFunction, getBankrollValue } from '.
 import { isMobile, isTablet } from '../shared/config.js';
 
 const NAME_COLUMN_MIN_WIDTH = 205;
-const EV_KELLY_COLUMN_MIN_WIDTH = 65;
+const EV_KELLY_COLUMN_MIN_WIDTH = 80;
 const ODDS_COLUMN_MIN_WIDTH = 80;
 
 export class NHLPlayerPropOddsTable extends BaseTable {
@@ -77,17 +81,21 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             @media screen and (max-width: 1024px) {
                 #table1-container {
                     max-width: 100vw !important;
-                    overflow-x: auto !important;
+                    overflow-x: hidden !important;
                     overflow-y: visible !important;
                     -webkit-overflow-scrolling: touch !important;
                 }
                 #table1-container .tabulator {
-                    max-width: none !important;
+                    max-width: 100% !important;
                     min-width: 0 !important;
                 }
+                /* FIXED: Changed from overflow-x: visible to overflow-x: auto
+                   so the tableholder becomes the scroll container and frozen
+                   columns work correctly (sticky needs a scrolling ancestor) */
                 #table1-container .tabulator .tabulator-tableholder {
-                    overflow-x: visible !important;
+                    overflow-x: auto !important;
                     overflow-y: auto !important;
+                    -webkit-overflow-scrolling: touch !important;
                 }
                 #table1-container .tabulator-col-title {
                     white-space: nowrap !important;
