@@ -1,6 +1,10 @@
 // components/bankrollInput.js - Bankroll Input for Kelly % Column
 // NHL version - Blue theme (#1e40af)
 // When bankroll > 0, Kelly % values convert to monetary amounts
+//
+// FIXES APPLIED:
+// - Increased container max-width from 70px to 85px to prevent 'Bankroll' placeholder clipping
+// - Matches the wider EV_KELLY_COLUMN_MIN_WIDTH (80px) in nhlPlayerPropOdds and nhlGameOdds
 
 export function createBankrollInput(cell, onRendered, success, cancel, editorParams = {}) {
     const table = cell.getTable();
@@ -14,7 +18,7 @@ export function createBankrollInput(cell, onRendered, success, cancel, editorPar
         align-items: center;
         justify-content: center;
         width: 100%;
-        max-width: 70px;
+        max-width: 85px;
         margin: 0 auto;
     `;
     
