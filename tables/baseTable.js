@@ -1,5 +1,9 @@
 // tables/baseTable.js - Base Table Class for NHL Props
 // Simplified: No expandable rows, no IndexedDB, memory cache only
+//
+// FIXES APPLIED:
+// - Added NBA-style loading indicator with centered overlay and live record count
+//   Previously showed no progress feedback during data loading
 
 import { API_CONFIG, isMobile, isTablet } from '../shared/config.js';
 
@@ -67,6 +71,40 @@ export class BaseTable {
         dataCache.set(key, { data, timestamp: Date.now() });
     }
     
+    // Show loading indicator with record count (matches NBA pattern)
+    showLoadingIndicator() {
+        if (!this.elementId) return;
+        const element = document.querySelector(this.elementId);
+        if (!element) return;
+        
+        // Don't create duplicate loading indicators
+        if (element.querySelector('.loading-indicator')) return;
+        
+        const progressDiv = document.createElement('div');
+        progressDiv.id = 'loading-progress';
+        progressDiv.className = 'loading-indicator';
+        progressDiv.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; background: white; padding: 20px; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);';
+        progressDiv.innerHTML = '<div style="text-align: center;"><div>Loading data...</div><div id="progress-text" style="margin-top: 10px; font-weight: bold;">0 records</div></div>';
+        element.style.position = 'relative';
+        element.appendChild(progressDiv);
+    }
+    
+    // Update loading indicator with current record count
+    updateLoadingProgress(count) {
+        const progressText = document.getElementById('progress-text');
+        if (progressText) {
+            progressText.textContent = `${count} records loaded...`;
+        }
+    }
+    
+    // Remove loading indicator
+    removeLoadingIndicator() {
+        const progressDiv = document.getElementById('loading-progress');
+        if (progressDiv) {
+            progressDiv.remove();
+        }
+    }
+    
     // Fetch all records with pagination (Supabase returns max 1000 per request)
     async fetchAllRecords(url, config) {
         const pageSize = API_CONFIG.fetchConfig.pageSize;
@@ -75,6 +113,11 @@ export class BaseTable {
         let hasMore = true;
         let retries = 0;
         const maxRetries = API_CONFIG.fetchConfig.maxRetries;
+        
+        console.log(`Starting data fetch from ${url}...`);
+        
+        // Show loading indicator
+        this.showLoadingIndicator();
         
         while (hasMore) {
             const pageUrl = `${url}?offset=${offset}&limit=${pageSize}`;
@@ -94,6 +137,9 @@ export class BaseTable {
                 if (data && data.length > 0) {
                     allRecords = allRecords.concat(data);
                     offset += pageSize;
+                    
+                    // Update progress with record count
+                    this.updateLoadingProgress(allRecords.length);
                     
                     if (data.length < pageSize) {
                         hasMore = false;
@@ -116,7 +162,10 @@ export class BaseTable {
             }
         }
         
-        console.log(`Fetched ${allRecords.length} total records from ${this.endpoint}`);
+        // Remove loading indicator
+        this.removeLoadingIndicator();
+        
+        console.log(`Fetch complete: ${allRecords.length} total records from ${this.endpoint}`);
         return allRecords;
     }
     
