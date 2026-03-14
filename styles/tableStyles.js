@@ -15,6 +15,8 @@
 //   Previously missing — caused frozen header to have no background color on mobile
 // - FIXED: Added standalone header alignment block for mobile/tablet
 //   Previously missing — caused extraneous vertical space in NHL headers
+// - FIXED: Desktop frozen column now has explicit even/odd/hover background colors
+//   Previously used 'inherit' which doesn't cascade through sticky positioning
 
 import { isMobile, isTablet, getDeviceScale } from '../shared/config.js';
 
@@ -233,7 +235,7 @@ function injectMinimalStyles() {
             display: flex !important;
             align-items: center !important;
             gap: 2px !important;
-            max-width: 60px !important;
+            max-width: 75px !important;
             margin: 0 auto !important;
         }
         
@@ -258,28 +260,38 @@ function injectMinimalStyles() {
             box-sizing: border-box !important;
         }
         
-        /* Frozen column backgrounds on ALL screen sizes */
+        /* =====================================================
+           FROZEN COLUMN BACKGROUNDS — ALL SCREEN SIZES
+           FIXED: Use explicit colors instead of 'inherit' because
+           sticky/frozen cells don't reliably inherit row backgrounds
+           through Tabulator's positioning. This matches the NBA
+           Webflow alternating row pattern exactly.
+           ===================================================== */
         .tabulator-row .tabulator-cell.tabulator-frozen {
-            background: inherit !important;
             position: sticky !important;
             left: 0 !important;
             z-index: 10 !important;
         }
         .tabulator-row .tabulator-frozen {
-            background: inherit !important;
+            position: sticky !important;
+            left: 0 !important;
+            z-index: 10 !important;
         }
+        /* Even rows — explicit background on frozen cells */
         .tabulator-row.tabulator-row-even .tabulator-cell.tabulator-frozen,
         .tabulator-row:nth-child(even) .tabulator-cell.tabulator-frozen,
         .tabulator-row.tabulator-row-even .tabulator-frozen,
         .tabulator-row:nth-child(even) .tabulator-frozen {
             background: #fafafa !important;
         }
+        /* Odd rows — explicit background on frozen cells */
         .tabulator-row.tabulator-row-odd .tabulator-cell.tabulator-frozen,
         .tabulator-row:nth-child(odd) .tabulator-cell.tabulator-frozen,
         .tabulator-row.tabulator-row-odd .tabulator-frozen,
         .tabulator-row:nth-child(odd) .tabulator-frozen {
             background: #ffffff !important;
         }
+        /* Hover — explicit background on frozen cells */
         .tabulator-row:hover .tabulator-cell.tabulator-frozen,
         .tabulator-row:hover .tabulator-frozen {
             background: #eff6ff !important;
@@ -300,6 +312,13 @@ function injectMinimalStyles() {
                 background-color: #e8e8e8 !important;
                 overflow-y: scroll !important;
                 overflow-x: auto !important;
+            }
+            
+            /* DESKTOP: Frozen header needs sticky + z-index */
+            .tabulator-header .tabulator-col.tabulator-frozen {
+                position: sticky !important;
+                left: 0 !important;
+                z-index: 101 !important;
             }
         }
         
@@ -380,9 +399,8 @@ function injectMinimalStyles() {
                 overflow-x: auto !important;
                 -webkit-overflow-scrolling: touch !important;
             }
-            /* Frozen cells inherit row background — matches NBA pattern */
+            /* Frozen cells need sticky positioning + explicit backgrounds */
             .tabulator-row .tabulator-cell.tabulator-frozen {
-                background: inherit !important;
                 position: sticky !important;
                 left: 0 !important;
                 z-index: 10 !important;
@@ -407,7 +425,7 @@ function injectMinimalStyles() {
         }
     `;
     document.head.appendChild(style);
-    console.log('NHL minimal styles injected (with frozen header blue theme + standalone header alignment fix)');
+    console.log('NHL minimal styles injected (with frozen header blue theme + standalone header alignment fix + desktop frozen bg fix)');
 }
 
 /**
@@ -493,8 +511,10 @@ function injectFullStyles() {
             background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
             z-index: 100 !important;
         }
-        .tabulator-row .tabulator-frozen { background: inherit !important; }
+        /* FIXED: Explicit even/odd/hover backgrounds for frozen cells */
+        .tabulator-row .tabulator-frozen { background: #ffffff !important; }
         .tabulator-row:nth-child(even) .tabulator-frozen { background: #fafafa !important; }
+        .tabulator-row:nth-child(odd) .tabulator-frozen { background: #ffffff !important; }
         .tabulator-row:hover .tabulator-frozen { background: #eff6ff !important; }
         
         /* Min/Max filters */
@@ -525,7 +545,7 @@ function injectFullStyles() {
         /* Bankroll input */
         .bankroll-input-container {
             display: flex !important; align-items: center !important;
-            gap: 2px !important; max-width: 60px !important; margin: 0 auto !important;
+            gap: 2px !important; max-width: 75px !important; margin: 0 auto !important;
         }
         .bankroll-input-container input {
             width: 100% !important; padding: 2px 3px !important;
@@ -600,7 +620,7 @@ function injectFullStyles() {
                 overflow-x: auto !important; -webkit-overflow-scrolling: touch !important;
             }
             .tabulator-row .tabulator-cell.tabulator-frozen {
-                background: inherit !important; position: sticky !important;
+                position: sticky !important;
                 left: 0 !important; z-index: 10 !important;
             }
             .tabulator-row.tabulator-row-even .tabulator-cell.tabulator-frozen { background: #fafafa !important; }
