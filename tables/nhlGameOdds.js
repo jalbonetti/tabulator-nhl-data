@@ -9,6 +9,10 @@
 //
 // MOBILE FIX: Container-specific CSS overrides + explicit pixel widths + header nowrap.
 // Odds columns have minWidth:80 and headers are measured to ensure proper fit.
+//
+// FIXES APPLIED:
+// - Mobile tableholder overflow-x changed from 'visible' to 'auto' to enable frozen Matchup column
+// - EV_KELLY_COLUMN_MIN_WIDTH increased from 65 to 80 to fit bankroll input without clipping
 
 import { BaseTable } from './baseTable.js';
 import { createCustomMultiSelect } from '../components/customMultiSelect.js';
@@ -16,7 +20,7 @@ import { createMinMaxFilter, minMaxFilterFunction } from '../components/minMaxFi
 import { createBankrollInput, bankrollFilterFunction, getBankrollValue } from '../components/bankrollInput.js';
 import { isMobile, isTablet } from '../shared/config.js';
 
-const EV_KELLY_COLUMN_MIN_WIDTH = 65;
+const EV_KELLY_COLUMN_MIN_WIDTH = 80;
 const ODDS_COLUMN_MIN_WIDTH = 80;
 
 export class NHLGameOddsTable extends BaseTable {
@@ -68,17 +72,21 @@ export class NHLGameOddsTable extends BaseTable {
             @media screen and (max-width: 1024px) {
                 #table2-container {
                     max-width: 100vw !important;
-                    overflow-x: auto !important;
+                    overflow-x: hidden !important;
                     overflow-y: visible !important;
                     -webkit-overflow-scrolling: touch !important;
                 }
                 #table2-container .tabulator {
-                    max-width: none !important;
+                    max-width: 100% !important;
                     min-width: 0 !important;
                 }
+                /* FIXED: Changed from overflow-x: visible to overflow-x: auto
+                   so the tableholder becomes the scroll container and frozen
+                   columns work correctly (sticky needs a scrolling ancestor) */
                 #table2-container .tabulator .tabulator-tableholder {
-                    overflow-x: visible !important;
+                    overflow-x: auto !important;
                     overflow-y: auto !important;
+                    -webkit-overflow-scrolling: touch !important;
                 }
                 #table2-container .tabulator-col-title {
                     white-space: nowrap !important;
