@@ -2,19 +2,11 @@
 // CRITICAL: renderHorizontal must be "basic" for fitData layout compatibility
 // NHL-specific: team abbreviations, prop abbreviations
 //
-// WIDTH MANAGEMENT:
-// - scanDataForMaxWidths: ALWAYS measures header widths for all columns on all devices.
-//   Data row scanning: mobile scans Best Odds Books only, desktop scans all columns.
-// - calculateAndApplyWidths: Gates behind _firstCalcDone. Sets explicit pixel widths.
-// - forceRecalculateWidths: Called by TabManager on tab switch. Also gates.
-// - equalizeClusteredColumns: NOW RUNS ON ALL DEVICES. Mobile sizes odds to "Median Odds" header width.
-//
-// MOBILE FIX: Container-specific CSS overrides remove the blanket max-width:100%.
-// Header titles use white-space:nowrap.
-//
-// FIXES APPLIED:
-// - Mobile tableholder overflow-x changed from 'visible' to 'auto' to enable frozen Name column
-// - EV_KELLY_COLUMN_MIN_WIDTH increased from 65 to 80 to fit bankroll input without clipping
+// MOBILE FROZEN COLUMN FIX:
+// - Container: overflow-x: hidden (prevents double scrollbar)
+// - Tabulator element: 100% width (NOT pixel widths) so it stays within container
+// - Tableholder: overflow-x: auto (this is the scroll container)
+// - _doCalculateAndApplyWidths: On mobile, does NOT set pixel widths on tabulator element
 
 import { BaseTable } from './baseTable.js';
 import { createCustomMultiSelect } from '../components/customMultiSelect.js';
@@ -79,19 +71,19 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             }
             
             @media screen and (max-width: 1024px) {
+                /* Container clips to viewport — tableholder scrolls inside */
                 #table1-container {
+                    width: 100% !important;
                     max-width: 100vw !important;
                     overflow-x: hidden !important;
-                    overflow-y: visible !important;
-                    -webkit-overflow-scrolling: touch !important;
                 }
+                /* Tabulator stays within container bounds */
                 #table1-container .tabulator {
+                    width: 100% !important;
                     max-width: 100% !important;
                     min-width: 0 !important;
                 }
-                /* FIXED: Changed from overflow-x: visible to overflow-x: auto
-                   so the tableholder becomes the scroll container and frozen
-                   columns work correctly (sticky needs a scrolling ancestor) */
+                /* Tableholder is the SCROLL CONTAINER for frozen columns */
                 #table1-container .tabulator .tabulator-tableholder {
                     overflow-x: auto !important;
                     overflow-y: auto !important;
@@ -106,7 +98,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         `;
         document.head.appendChild(style);
         this._stylesInjected = true;
-        console.log('NHL Player Prop Odds: Injected width override styles');
     }
 
     abbreviateMatchup(matchup) {
@@ -167,7 +158,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         
         this.table.on("tableBuilt", () => {
             console.log("NHL Player Prop Odds table built");
-            
             window.addEventListener('resize', this.debounce(() => {
                 if (this.table && this.table.getDataCount() > 0 && this._firstCalcDone) {
                     this._doCalculateAndApplyWidths();
@@ -185,7 +175,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
                     this._doCalculateAndApplyWidths();
                     this.ensureNameColumnWidth();
                     this._firstCalcDone = true;
-                    console.log('NHL Player Prop Odds: First calc done, width updates now enabled');
                 }
             }, 100);
         });
@@ -214,14 +203,7 @@ export class NHLPlayerPropOddsTable extends BaseTable {
     }
 
     forceRecalculateWidths() {
-        if (!this.table) return;
-        console.log('NHL Player Prop Odds forceRecalculateWidths called');
-        
-        if (!this._firstCalcDone) {
-            console.log('NHL Player Prop Odds: Skipping — first calc not done yet');
-            return;
-        }
-        
+        if (!this.table || !this._firstCalcDone) return;
         const data = this.table.getData() || [];
         if (data.length > 0) {
             this.scanDataForMaxWidths(data);
@@ -242,7 +224,6 @@ export class NHLPlayerPropOddsTable extends BaseTable {
 
     _doCalculateAndApplyWidths() {
         if (!this.table) return;
-        
         const tableElement = this.table.element;
         if (!tableElement) return;
         
@@ -255,33 +236,39 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             let totalColumnWidth = 0;
             columns.forEach(col => { if (col.isVisible()) totalColumnWidth += col.getWidth(); });
             
-            const tableHolder = tableElement.querySelector('.tabulator-tableholder');
-            const SCROLLBAR_WIDTH = isSmallScreen ? 0 : 17;
-            const totalWidth = totalColumnWidth + SCROLLBAR_WIDTH;
-            
-            tableElement.style.width = totalWidth + 'px';
-            tableElement.style.minWidth = totalWidth + 'px';
-            tableElement.style.maxWidth = totalWidth + 'px';
-            
-            if (tableHolder) { 
-                tableHolder.style.width = totalWidth + 'px'; 
-                tableHolder.style.maxWidth = totalWidth + 'px'; 
-            }
-            
-            const header = tableElement.querySelector('.tabulator-header');
-            if (header) header.style.width = totalWidth + 'px';
-            
             if (isSmallScreen) {
+                // MOBILE: Do NOT set pixel widths on the tabulator element.
+                // The tabulator must stay at 100% of its container so the
+                // tableholder becomes the horizontal scroll container.
+                // Frozen columns use position:sticky inside the scrolling tableholder.
                 const tc = tableElement.closest('.table-container');
                 if (tc) {
                     tc.style.width = '';
                     tc.style.minWidth = '';
                     tc.style.overflowX = '';
                 }
-                tableElement.style.setProperty('width', totalWidth + 'px', 'important');
-                tableElement.style.setProperty('min-width', totalWidth + 'px', 'important');
-                tableElement.style.setProperty('max-width', totalWidth + 'px', 'important');
+                // Clear any previously-set inline pixel widths
+                tableElement.style.removeProperty('width');
+                tableElement.style.removeProperty('min-width');
+                tableElement.style.removeProperty('max-width');
             } else {
+                // DESKTOP: Set explicit pixel widths for fit-content layout
+                const SCROLLBAR_WIDTH = 17;
+                const totalWidth = totalColumnWidth + SCROLLBAR_WIDTH;
+                
+                tableElement.style.width = totalWidth + 'px';
+                tableElement.style.minWidth = totalWidth + 'px';
+                tableElement.style.maxWidth = totalWidth + 'px';
+                
+                const tableHolder = tableElement.querySelector('.tabulator-tableholder');
+                if (tableHolder) { 
+                    tableHolder.style.width = totalWidth + 'px'; 
+                    tableHolder.style.maxWidth = totalWidth + 'px'; 
+                }
+                
+                const header = tableElement.querySelector('.tabulator-header');
+                if (header) header.style.width = totalWidth + 'px';
+                
                 const tableContainer = tableElement.closest('.table-container');
                 if (tableContainer) {
                     tableContainer.style.width = 'fit-content';
@@ -289,32 +276,21 @@ export class NHLPlayerPropOddsTable extends BaseTable {
                     tableContainer.style.maxWidth = 'none';
                 }
             }
-            
             this.ensureNameColumnWidth();
-            
-            console.log(`NHL Player Prop Odds: Set width to ${totalWidth}px (columns: ${totalColumnWidth}px + scrollbar: ${SCROLLBAR_WIDTH}px, device: ${isSmallScreen ? 'mobile' : 'desktop'})`);
         } catch (error) {
             console.error('Error in NHL Player Prop Odds calculateAndApplyWidths:', error);
         }
     }
 
-    // FIXED: Now measures header widths for ALL columns on ALL devices.
-    // Data row scanning: mobile scans Best Odds Books only, desktop scans all.
-    // This ensures columns like "Book Odds", "Median Odds", "Best Odds" get
-    // properly sized to fit their header text with white-space:nowrap on first load.
     scanDataForMaxWidths(data) {
         if (!data || data.length === 0 || !this.table) return;
-        
         const mobile = isMobile();
         const tablet = isTablet();
         const isSmallScreen = mobile || tablet;
         
-        console.log(`NHL Player Prop Odds Scanning ${data.length} rows (mobile: ${mobile}, tablet: ${tablet})...`);
-        
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         
-        // ALL columns get header measurement on ALL devices
         const allFields = {
             "Player Matchup": 0, "Player Team": 0, "Player Prop Type": 0,
             "Player Over/Under": 0, "Player Book": 0, "Player Prop Odds": 0,
@@ -322,11 +298,9 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             "Player Best Odds Books": 0, "EV %": 0, "Quarter Kelly %": 0, "Link": 0
         };
         
-        // Measure header widths for ALL columns (critical for nowrap headers)
         ctx.font = '600 12px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
         const HEADER_PADDING = 16;
         const SORT_ICON_WIDTH = 16;
-        
         const fieldToTitle = {
             "Player Matchup": "Matchup", "Player Team": "Team", "Player Prop Type": "Prop",
             "Player Over/Under": "Label", "Player Book": "Book", "Player Prop Odds": "Book Odds",
@@ -334,19 +308,13 @@ export class NHLPlayerPropOddsTable extends BaseTable {
             "Player Best Odds Books": "Best Books", "EV %": "EV %",
             "Quarter Kelly %": "Bet Size", "Link": "Link"
         };
-        
         Object.keys(allFields).forEach(field => {
             const title = fieldToTitle[field] || field;
-            const headerWidth = ctx.measureText(title).width + HEADER_PADDING + SORT_ICON_WIDTH;
-            allFields[field] = headerWidth;
+            allFields[field] = ctx.measureText(title).width + HEADER_PADDING + SORT_ICON_WIDTH;
         });
         
-        // Data row scanning: mobile = Best Odds Books only, desktop = all columns
         ctx.font = '500 12px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
-        
-        const dataFieldsToScan = isSmallScreen
-            ? ["Player Best Odds Books"]  // Mobile: only scan variable-width column
-            : Object.keys(allFields);     // Desktop: scan all
+        const dataFieldsToScan = isSmallScreen ? ["Player Best Odds Books"] : Object.keys(allFields);
         
         data.forEach(row => {
             dataFieldsToScan.forEach(field => {
@@ -359,50 +327,30 @@ export class NHLPlayerPropOddsTable extends BaseTable {
                     }
                     if (field === 'EV %' || field === 'Quarter Kelly %') {
                         const num = parseFloat(value);
-                        if (!isNaN(num)) {
-                            const pctDisplay = (num * 100).toFixed(1) + '%';
-                            const moneyDisplay = '$99999.99';
-                            displayValue = pctDisplay.length > moneyDisplay.length ? pctDisplay : moneyDisplay;
-                        }
+                        if (!isNaN(num)) displayValue = '$99999.99';
                     }
                     if (field === 'Player Prop Type') displayValue = this.abbreviateProp(value);
                     if (field === 'Player Matchup') displayValue = this.abbreviateMatchup(value);
                     if (field === 'Player Team') displayValue = this.abbreviateTeam(value);
                     if (field === 'Link') displayValue = 'Bet';
-                    
                     const textWidth = ctx.measureText(displayValue).width;
                     if (textWidth > allFields[field]) allFields[field] = textWidth;
                 }
             });
         });
         
-        if (!isSmallScreen) {
-            const longestAbbrevMatchup = "VGK @ TBL";
-            const longestMatchupWidth = ctx.measureText(longestAbbrevMatchup).width;
-            if (longestMatchupWidth > allFields["Player Matchup"]) {
-                allFields["Player Matchup"] = longestMatchupWidth;
-            }
-        }
-        
         const CELL_PADDING = 16;
         const BUFFER = 8;
-        
         Object.keys(allFields).forEach(field => {
             if (allFields[field] > 0) {
                 const column = this.table.getColumn(field);
                 if (column) {
                     const requiredWidth = allFields[field] + CELL_PADDING + BUFFER;
-                    const currentWidth = column.getWidth();
-                    if (requiredWidth > currentWidth) {
-                        column.setWidth(Math.ceil(requiredWidth));
-                        console.log(`NHL Player Prop Odds Set ${field} to ${Math.ceil(requiredWidth)}px (was ${currentWidth}px)`);
-                    }
+                    if (requiredWidth > column.getWidth()) column.setWidth(Math.ceil(requiredWidth));
                 }
             }
         });
-        
         this.ensureNameColumnWidth();
-        console.log('NHL Player Prop Odds scan complete');
     }
 
     oddsSorter(a, b) {
@@ -423,12 +371,9 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         return getNum(a) - getNum(b);
     }
 
-    // FIXED: Now runs on ALL devices. Mobile sizes odds to "Median Odds" header width.
     equalizeClusteredColumns() {
         if (!this.table) return;
-        
         const isSmallScreen = isMobile() || isTablet();
-        
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         ctx.font = '600 12px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
@@ -438,117 +383,36 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         const oddsCluster = ['Player Prop Odds', 'Player Median Odds', 'Player Best Odds'];
         
         if (isSmallScreen) {
-            // MOBILE: Size all odds columns to "Median Odds" header width (the widest header)
-            const medianOddsHeaderWidth = ctx.measureText('Median Odds').width + CELL_PADDING + SORT_ICON_WIDTH;
-            const targetWidth = Math.ceil(medianOddsHeaderWidth);
-            oddsCluster.forEach(field => {
-                const col = this.table.getColumn(field);
-                if (col) col.setWidth(targetWidth);
-            });
-            
-            // Also equalize EV/Kelly on mobile
+            const targetWidth = Math.ceil(ctx.measureText('Median Odds').width + CELL_PADDING + SORT_ICON_WIDTH);
+            oddsCluster.forEach(f => { const c = this.table.getColumn(f); if (c) c.setWidth(targetWidth); });
             const evKellyCluster = ['EV %', 'Quarter Kelly %'];
-            const betSizeHeaderWidth = ctx.measureText('Bet Size').width + CELL_PADDING + SORT_ICON_WIDTH;
-            const evHeaderWidth = ctx.measureText('EV %').width + CELL_PADDING + SORT_ICON_WIDTH;
-            const evKellyTarget = Math.ceil(Math.max(betSizeHeaderWidth, evHeaderWidth, EV_KELLY_COLUMN_MIN_WIDTH));
-            evKellyCluster.forEach(field => {
-                const col = this.table.getColumn(field);
-                if (col) col.setWidth(evKellyTarget);
-            });
-            
-            console.log(`NHL Player Prop Odds Mobile equalized odds to ${targetWidth}px, EV/Kelly to ${evKellyTarget}px`);
+            const evKellyTarget = Math.ceil(Math.max(
+                ctx.measureText('Bet Size').width + CELL_PADDING + SORT_ICON_WIDTH,
+                ctx.measureText('EV %').width + CELL_PADDING + SORT_ICON_WIDTH,
+                EV_KELLY_COLUMN_MIN_WIDTH));
+            evKellyCluster.forEach(f => { const c = this.table.getColumn(f); if (c) c.setWidth(evKellyTarget); });
         } else {
-            // DESKTOP: Use max of data width or header width (existing logic)
             let maxOddsWidth = 0;
-            oddsCluster.forEach(field => {
-                const col = this.table.getColumn(field);
-                if (col && col.getWidth() > maxOddsWidth) maxOddsWidth = col.getWidth();
-            });
-            ['Book Odds', 'Median Odds', 'Best Odds'].forEach(title => {
-                const w = ctx.measureText(title).width + CELL_PADDING + SORT_ICON_WIDTH;
-                if (w > maxOddsWidth) maxOddsWidth = w;
-            });
-            oddsCluster.forEach(field => {
-                const col = this.table.getColumn(field);
-                if (col) col.setWidth(Math.ceil(maxOddsWidth));
-            });
-            
+            oddsCluster.forEach(f => { const c = this.table.getColumn(f); if (c && c.getWidth() > maxOddsWidth) maxOddsWidth = c.getWidth(); });
+            ['Book Odds', 'Median Odds', 'Best Odds'].forEach(t => { const w = ctx.measureText(t).width + CELL_PADDING + SORT_ICON_WIDTH; if (w > maxOddsWidth) maxOddsWidth = w; });
+            oddsCluster.forEach(f => { const c = this.table.getColumn(f); if (c) c.setWidth(Math.ceil(maxOddsWidth)); });
             const evKellyCluster = ['EV %', 'Quarter Kelly %'];
             let maxEvKellyWidth = EV_KELLY_COLUMN_MIN_WIDTH;
-            evKellyCluster.forEach(field => {
-                const col = this.table.getColumn(field);
-                if (col && col.getWidth() > maxEvKellyWidth) maxEvKellyWidth = col.getWidth();
-            });
-            evKellyCluster.forEach(field => {
-                const col = this.table.getColumn(field);
-                if (col) col.setWidth(Math.ceil(maxEvKellyWidth));
-            });
-            
-            console.log(`NHL Player Prop Odds Equalized odds to ${Math.ceil(maxOddsWidth)}px, EV/Kelly to ${Math.ceil(maxEvKellyWidth)}px`);
+            evKellyCluster.forEach(f => { const c = this.table.getColumn(f); if (c && c.getWidth() > maxEvKellyWidth) maxEvKellyWidth = c.getWidth(); });
+            evKellyCluster.forEach(f => { const c = this.table.getColumn(f); if (c) c.setWidth(Math.ceil(maxEvKellyWidth)); });
         }
     }
 
     getColumns(isSmallScreen = false) {
         const self = this;
-        
-        const oddsFormatter = (cell) => {
-            const value = cell.getValue();
-            if (value === null || value === undefined || value === '' || value === '-') return '-';
-            const num = parseInt(value, 10);
-            if (isNaN(num)) return '-';
-            return num > 0 ? `+${num}` : `${num}`;
-        };
-
-        const lineFormatter = (cell) => {
-            const value = cell.getValue();
-            if (value === null || value === undefined || value === '') return '-';
-            const num = parseFloat(value);
-            if (isNaN(num)) return '-';
-            return num.toFixed(1);
-        };
-
-        const matchupFormatter = (cell) => {
-            const value = cell.getValue();
-            return value ? self.abbreviateMatchup(value) : '-';
-        };
-
-        const teamFormatter = (cell) => {
-            const value = cell.getValue();
-            return value ? self.abbreviateTeam(value) : '-';
-        };
-
-        const propFormatter = (cell) => {
-            const value = cell.getValue();
-            return value ? self.abbreviateProp(value) : '-';
-        };
-
-        const evFormatter = (cell) => {
-            const value = cell.getValue();
-            if (value === null || value === undefined || value === '' || value === '-') return '-';
-            const num = parseFloat(value);
-            if (isNaN(num)) return '-';
-            return (num * 100).toFixed(1) + '%';
-        };
-
-        const kellyFormatter = (cell) => {
-            const value = cell.getValue();
-            if (value === null || value === undefined || value === '' || value === '-') return '-';
-            const num = parseFloat(value);
-            if (isNaN(num)) return '-';
-            const bankroll = getBankrollValue('NHL Quarter Kelly %');
-            if (bankroll > 0) return '$' + (num * bankroll).toFixed(2);
-            return (num * 100).toFixed(1) + '%';
-        };
-
-        const linkFormatter = (cell) => {
-            const value = cell.getValue();
-            if (!value || value === '-' || value === '') return '-';
-            const a = document.createElement('a');
-            a.href = value; a.target = '_blank'; a.rel = 'noopener noreferrer';
-            a.textContent = 'Bet';
-            a.style.cssText = 'color: #2563eb; text-decoration: underline; font-weight: 500;';
-            return a;
-        };
+        const oddsFormatter = (cell) => { const v = cell.getValue(); if (v === null || v === undefined || v === '' || v === '-') return '-'; const n = parseInt(v, 10); if (isNaN(n)) return '-'; return n > 0 ? `+${n}` : `${n}`; };
+        const lineFormatter = (cell) => { const v = cell.getValue(); if (v === null || v === undefined || v === '') return '-'; const n = parseFloat(v); if (isNaN(n)) return '-'; return n.toFixed(1); };
+        const matchupFormatter = (cell) => { const v = cell.getValue(); return v ? self.abbreviateMatchup(v) : '-'; };
+        const teamFormatter = (cell) => { const v = cell.getValue(); return v ? self.abbreviateTeam(v) : '-'; };
+        const propFormatter = (cell) => { const v = cell.getValue(); return v ? self.abbreviateProp(v) : '-'; };
+        const evFormatter = (cell) => { const v = cell.getValue(); if (v === null || v === undefined || v === '' || v === '-') return '-'; const n = parseFloat(v); if (isNaN(n)) return '-'; return (n * 100).toFixed(1) + '%'; };
+        const kellyFormatter = (cell) => { const v = cell.getValue(); if (v === null || v === undefined || v === '' || v === '-') return '-'; const n = parseFloat(v); if (isNaN(n)) return '-'; const b = getBankrollValue('NHL Quarter Kelly %'); if (b > 0) return '$' + (n * b).toFixed(2); return (n * 100).toFixed(1) + '%'; };
+        const linkFormatter = (cell) => { const v = cell.getValue(); if (!v || v === '-' || v === '') return '-'; const a = document.createElement('a'); a.href = v; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = 'Bet'; a.style.cssText = 'color: #2563eb; text-decoration: underline; font-weight: 500;'; return a; };
 
         return [
             { title: "Name", field: "Player Name", frozen: true, widthGrow: 0, minWidth: NAME_COLUMN_MIN_WIDTH, sorter: "string", headerFilter: true, resizable: false, hozAlign: "left" },
