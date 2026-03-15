@@ -56,40 +56,40 @@ export class NHLPlayerPropOddsTable extends BaseTable {
         style.id = styleId;
         style.textContent = `
             @media screen and (min-width: 1025px) {
-                #table1-container {
+                #table2-container {
                     width: fit-content !important;
                     max-width: none !important;
                     overflow-x: visible !important;
                 }
-                #table1-container .tabulator {
+                #table2-container .tabulator {
                     width: auto !important;
                     max-width: none !important;
                 }
-                #table1-container .tabulator .tabulator-tableholder {
+                #table2-container .tabulator .tabulator-tableholder {
                     overflow-y: auto !important;
                 }
             }
             
             @media screen and (max-width: 1024px) {
                 /* Container clips to viewport — tableholder scrolls inside */
-                #table1-container {
+                #table2-container {
                     width: 100% !important;
                     max-width: 100vw !important;
                     overflow-x: hidden !important;
                 }
                 /* Tabulator stays within container bounds */
-                #table1-container .tabulator {
+                #table2-container .tabulator {
                     width: 100% !important;
                     max-width: 100% !important;
                     min-width: 0 !important;
                 }
                 /* Tableholder is the SCROLL CONTAINER for frozen columns */
-                #table1-container .tabulator .tabulator-tableholder {
+                #table2-container .tabulator .tabulator-tableholder {
                     overflow-x: auto !important;
                     overflow-y: auto !important;
                     -webkit-overflow-scrolling: touch !important;
                 }
-                #table1-container .tabulator-col-title {
+                #table2-container .tabulator-col-title {
                     white-space: nowrap !important;
                     word-break: normal !important;
                     overflow-wrap: normal !important;
