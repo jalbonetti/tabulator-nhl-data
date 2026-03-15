@@ -14,7 +14,6 @@ import { createMinMaxFilter, minMaxFilterFunction } from '../components/minMaxFi
 import { isMobile, isTablet } from '../shared/config.js';
 
 const NAME_COLUMN_MIN_WIDTH = 205;
-const LINEUP_COLUMN_MIN_WIDTH = 85;
 const SPLIT_COLUMN_MIN_WIDTH = 62;
 
 export class NHLPlayerPropClearancesTable extends BaseTable {
@@ -297,18 +296,17 @@ export class NHLPlayerPropClearancesTable extends BaseTable {
         if (!data || data.length === 0 || !this.table) return;
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        const maxWidths = { "Lineup Status": 0, "Player Team": 0, "Player Prop": 0 };
+        const maxWidths = { "Player Team": 0, "Player Prop": 0 };
         ctx.font = '600 12px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
         const HP = 16, SI = 16;
-        const ftt = { "Lineup Status": "Lineup", "Player Team": "Team", "Player Prop": "Prop" };
+        const ftt = { "Player Team": "Team", "Player Prop": "Prop" };
         Object.keys(maxWidths).forEach(f => { maxWidths[f] = ctx.measureText(ftt[f] || f).width + HP + SI; });
         ctx.font = '500 12px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
         data.forEach(row => {
             Object.keys(maxWidths).forEach(f => {
                 let v = row[f];
                 if (v != null && v !== '') {
-                    if (f === "Lineup Status") v = String(v).replace('(Expected)', '(Exp)').replace('(Confirmed)', '(Conf)');
-                    else if (f === "Player Prop") v = this.propAbbrevMap[v] || v;
+                    if (f === "Player Prop") v = this.propAbbrevMap[v] || v;
                     const tw = ctx.measureText(String(v)).width;
                     if (tw > maxWidths[f]) maxWidths[f] = tw;
                 }
@@ -378,7 +376,7 @@ export class NHLPlayerPropClearancesTable extends BaseTable {
         const clearanceFormatter = (cell) => {
             const v = cell.getValue(); if (v == null || v === '') return '-';
             const s = String(v).replace('%', '').trim(); const n = parseFloat(s);
-            if (isNaN(n)) return '-'; return (n * 100).toFixed(1) + '%';
+            if (isNaN(n)) return '-'; return n.toFixed(1) + '%';
         };
         const oneDecimalFormatter = (cell) => {
             const v = cell.getValue(); if (v == null || v === '') return '-';
@@ -392,10 +390,6 @@ export class NHLPlayerPropClearancesTable extends BaseTable {
             const v = cell.getValue(); if (v == null || v === '') return '-';
             let s = String(v); if (s === 'Full Season') return 'Season'; if (s === 'Last 30 Days') return 'L30 Days'; return s;
         };
-        const lineupFormatter = (cell) => {
-            const v = cell.getValue(); if (v == null || v === '') return '-';
-            return String(v).replace('(Expected)', '(Exp)').replace('(Confirmed)', '(Conf)');
-        };
         const oddsFormatter = (cell) => {
             const v = cell.getValue(); if (v == null || v === '' || v === '-') return '-';
             const n = parseInt(v, 10); if (isNaN(n)) return '-'; return n > 0 ? `+${n}` : `${n}`;
@@ -406,8 +400,6 @@ export class NHLPlayerPropClearancesTable extends BaseTable {
             { title: "Name", field: "Player Name", frozen: true, widthGrow: 0, minWidth: NAME_COLUMN_MIN_WIDTH, sorter: "string", headerFilter: true, resizable: false, formatter: this.createNameFormatter(), hozAlign: "left", cssClass: "standalone-header" },
             // TEAM - standalone
             { title: "Team", field: "Player Team", widthGrow: 0, minWidth: 45, sorter: "string", headerFilter: createCustomMultiSelect, resizable: false, hozAlign: "center", cssClass: "standalone-header" },
-            // LINEUP - standalone
-            { title: "Lineup", field: "Lineup Status", widthGrow: 0, minWidth: LINEUP_COLUMN_MIN_WIDTH, sorter: "string", headerFilter: createCustomMultiSelect, resizable: false, hozAlign: "center", formatter: lineupFormatter, cssClass: "standalone-header" },
             // PROP INFO group
             { title: "Prop Info", columns: [
                 { title: "Prop", field: "Player Prop", widthGrow: 0, minWidth: 75, sorter: "string", headerFilter: createCustomMultiSelect, resizable: false, hozAlign: "center", formatter: propFormatter },
