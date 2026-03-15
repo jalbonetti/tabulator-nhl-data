@@ -46,37 +46,37 @@ export class NHLGameOddsTable extends BaseTable {
         style.id = styleId;
         style.textContent = `
             @media screen and (min-width: 1025px) {
-                #table2-container {
+                #table3-container {
                     width: fit-content !important;
                     max-width: none !important;
                     overflow-x: visible !important;
                 }
-                #table2-container .tabulator {
+                #table3-container .tabulator {
                     width: auto !important;
                     max-width: none !important;
                 }
-                #table2-container .tabulator .tabulator-tableholder {
+                #table3-container .tabulator .tabulator-tableholder {
                     overflow-y: auto !important;
                 }
             }
             
             @media screen and (max-width: 1024px) {
-                #table2-container {
+                #table3-container {
                     width: 100% !important;
                     max-width: 100vw !important;
                     overflow-x: hidden !important;
                 }
-                #table2-container .tabulator {
+                #table3-container .tabulator {
                     width: 100% !important;
                     max-width: 100% !important;
                     min-width: 0 !important;
                 }
-                #table2-container .tabulator .tabulator-tableholder {
+                #table3-container .tabulator .tabulator-tableholder {
                     overflow-x: auto !important;
                     overflow-y: auto !important;
                     -webkit-overflow-scrolling: touch !important;
                 }
-                #table2-container .tabulator-col-title {
+                #table3-container .tabulator-col-title {
                     white-space: nowrap !important;
                     word-break: normal !important;
                     overflow-wrap: normal !important;
