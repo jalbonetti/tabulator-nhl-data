@@ -48,14 +48,14 @@ export class NHLPlayerDKTable extends BaseTable {
         style.id = styleId;
         style.textContent = `
             @media screen and (min-width: 1025px) {
-                #table3-container { width: fit-content !important; max-width: none !important; overflow-x: visible !important; }
-                #table3-container .tabulator { width: auto !important; max-width: none !important; }
-                #table3-container .tabulator .tabulator-tableholder { overflow-y: auto !important; }
+                #table4-container { width: fit-content !important; max-width: none !important; overflow-x: visible !important; }
+                #table4-container .tabulator { width: auto !important; max-width: none !important; }
+                #table4-container .tabulator .tabulator-tableholder { overflow-y: auto !important; }
             }
             @media screen and (max-width: 1024px) {
-                #table3-container { width: 100% !important; max-width: 100vw !important; overflow-x: hidden !important; }
-                #table3-container .tabulator { width: 100% !important; max-width: 100% !important; min-width: 0 !important; }
-                #table3-container .tabulator .tabulator-tableholder { overflow-x: auto !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; }
+                #table4-container { width: 100% !important; max-width: 100vw !important; overflow-x: hidden !important; }
+                #table4-container .tabulator { width: 100% !important; max-width: 100% !important; min-width: 0 !important; }
+                #table4-container .tabulator .tabulator-tableholder { overflow-x: auto !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; }
             }
         `;
         document.head.appendChild(style);
