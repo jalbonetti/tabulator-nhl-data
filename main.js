@@ -1,18 +1,14 @@
 // main.js - NHL Props Table System
 // Based on NBA basketball main.js pattern
-// 3 tables: Matchups, Prop Odds, Game Odds
-// No expandable rows, no global expanded state
+// 5 tables: Matchups, Prop Odds, Game Odds, DraftKings DFS, FanDuel DFS
 // Mounts to: #nhl-table
-//
-// NO CSS HEADER OVERRIDES — tableStyles.js white-space: normal + Tabulator
-// fitData handles mobile headers the same as NBA/NCAAM. The only fix needed
-// is in the JS files: forceRecalculateWidths() always calls
-// calculateAndApplyWidths() which clears desktop widths on mobile.
 
 import { injectStyles } from './styles/tableStyles.js';
 import { NHLMatchupsTable } from './tables/nhlMatchups.js';
 import { NHLPlayerPropOddsTable } from './tables/nhlPlayerPropOdds.js';
 import { NHLGameOddsTable } from './tables/nhlGameOdds.js';
+import { NHLPlayerDKTable } from './tables/nhlPlayerDK.js';
+import { NHLPlayerFDTable } from './tables/nhlPlayerFD.js';
 import { TabManager } from './components/tabManager.js';
 
 document.addEventListener("DOMContentLoaded", function() {
@@ -34,7 +30,9 @@ document.addEventListener("DOMContentLoaded", function() {
         const tableInstances = {
             table0: new NHLMatchupsTable("#matchups-table"),
             table1: new NHLPlayerPropOddsTable("#prop-odds-table"),
-            table2: new NHLGameOddsTable("#game-odds-table")
+            table2: new NHLGameOddsTable("#game-odds-table"),
+            table3: new NHLPlayerDKTable("#dk-dfs-table"),
+            table4: new NHLPlayerFDTable("#fd-dfs-table")
         };
         
         const tabManager = new TabManager(tableInstances);
@@ -62,6 +60,8 @@ function createCompleteTableStructure(existingTable) {
             <button class="tab-button active" data-tab="table0">Matchups</button>
             <button class="tab-button" data-tab="table1">Prop Odds</button>
             <button class="tab-button" data-tab="table2">Game Odds</button>
+            <button class="tab-button" data-tab="table3">DraftKings DFS</button>
+            <button class="tab-button" data-tab="table4">FanDuel DFS</button>
         </div>
     `;
     
@@ -72,7 +72,9 @@ function createCompleteTableStructure(existingTable) {
     const tableConfigs = [
         { tabId: 'table0', tableId: 'matchups-table', active: true },
         { tabId: 'table1', tableId: 'prop-odds-table', active: false },
-        { tabId: 'table2', tableId: 'game-odds-table', active: false }
+        { tabId: 'table2', tableId: 'game-odds-table', active: false },
+        { tabId: 'table3', tableId: 'dk-dfs-table', active: false },
+        { tabId: 'table4', tableId: 'fd-dfs-table', active: false }
     ];
     
     tableConfigs.forEach(config => {
@@ -98,5 +100,5 @@ function createCompleteTableStructure(existingTable) {
         existingTable.style.display = 'none';
     }
     
-    console.log("NHL table structure created");
+    console.log("NHL table structure created with 5 tabs");
 }
