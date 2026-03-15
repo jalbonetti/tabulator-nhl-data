@@ -1,10 +1,10 @@
 // main.js - NHL Props Table System
-// Based on NBA basketball main.js pattern
-// 5 tables: Matchups, Prop Odds, Game Odds, DraftKings DFS, FanDuel DFS
+// 6 tables: Matchups, Prop Clearances, Prop Odds, Game Odds, DraftKings DFS, FanDuel DFS
 // Mounts to: #nhl-table
 
 import { injectStyles } from './styles/tableStyles.js';
 import { NHLMatchupsTable } from './tables/nhlMatchups.js';
+import { NHLPlayerPropClearancesTable } from './tables/nhlPlayerPropClearances.js';
 import { NHLPlayerPropOddsTable } from './tables/nhlPlayerPropOdds.js';
 import { NHLGameOddsTable } from './tables/nhlGameOdds.js';
 import { NHLPlayerDKTable } from './tables/nhlPlayerDK.js';
@@ -29,10 +29,11 @@ document.addEventListener("DOMContentLoaded", function() {
         
         const tableInstances = {
             table0: new NHLMatchupsTable("#matchups-table"),
-            table1: new NHLPlayerPropOddsTable("#prop-odds-table"),
-            table2: new NHLGameOddsTable("#game-odds-table"),
-            table3: new NHLPlayerDKTable("#dk-dfs-table"),
-            table4: new NHLPlayerFDTable("#fd-dfs-table")
+            table1: new NHLPlayerPropClearancesTable("#prop-clearances-table"),
+            table2: new NHLPlayerPropOddsTable("#prop-odds-table"),
+            table3: new NHLGameOddsTable("#game-odds-table"),
+            table4: new NHLPlayerDKTable("#dk-dfs-table"),
+            table5: new NHLPlayerFDTable("#fd-dfs-table")
         };
         
         const tabManager = new TabManager(tableInstances);
@@ -58,10 +59,11 @@ function createCompleteTableStructure(existingTable) {
     tabsContainer.innerHTML = `
         <div class="tab-buttons">
             <button class="tab-button active" data-tab="table0">Matchups</button>
-            <button class="tab-button" data-tab="table1">Prop Odds</button>
-            <button class="tab-button" data-tab="table2">Game Odds</button>
-            <button class="tab-button" data-tab="table3">DraftKings DFS</button>
-            <button class="tab-button" data-tab="table4">FanDuel DFS</button>
+            <button class="tab-button" data-tab="table1">Prop Clearances</button>
+            <button class="tab-button" data-tab="table2">Prop Odds</button>
+            <button class="tab-button" data-tab="table3">Game Odds</button>
+            <button class="tab-button" data-tab="table4">DraftKings DFS</button>
+            <button class="tab-button" data-tab="table5">FanDuel DFS</button>
         </div>
     `;
     
@@ -71,23 +73,20 @@ function createCompleteTableStructure(existingTable) {
     
     const tableConfigs = [
         { tabId: 'table0', tableId: 'matchups-table', active: true },
-        { tabId: 'table1', tableId: 'prop-odds-table', active: false },
-        { tabId: 'table2', tableId: 'game-odds-table', active: false },
-        { tabId: 'table3', tableId: 'dk-dfs-table', active: false },
-        { tabId: 'table4', tableId: 'fd-dfs-table', active: false }
+        { tabId: 'table1', tableId: 'prop-clearances-table', active: false },
+        { tabId: 'table2', tableId: 'prop-odds-table', active: false },
+        { tabId: 'table3', tableId: 'game-odds-table', active: false },
+        { tabId: 'table4', tableId: 'dk-dfs-table', active: false },
+        { tabId: 'table5', tableId: 'fd-dfs-table', active: false }
     ];
     
     tableConfigs.forEach(config => {
         const tableContainer = document.createElement('div');
         tableContainer.id = `${config.tabId}-container`;
         tableContainer.className = `table-container ${config.active ? 'active-table' : 'inactive-table'}`;
-        if (!config.active) {
-            tableContainer.style.display = 'none';
-        }
-        
+        if (!config.active) { tableContainer.style.display = 'none'; }
         const tableDiv = document.createElement('div');
         tableDiv.id = config.tableId;
-        
         tableContainer.appendChild(tableDiv);
         tablesContainer.appendChild(tableContainer);
     });
@@ -100,5 +99,5 @@ function createCompleteTableStructure(existingTable) {
         existingTable.style.display = 'none';
     }
     
-    console.log("NHL table structure created with 5 tabs");
+    console.log("NHL table structure created with 6 tabs");
 }
