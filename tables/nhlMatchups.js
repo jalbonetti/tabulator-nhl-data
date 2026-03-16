@@ -368,12 +368,7 @@ export class NHLMatchupsTable extends BaseTable {
         table.appendChild(thead);
 
         const tbody = document.createElement('tbody');
-        // Sort: Full Season first
-        const sorted = [...goalieData].sort((a, b) => {
-            if (a["Split"] === 'Full Season') return -1;
-            if (b["Split"] === 'Full Season') return 1;
-            return 0;
-        });
+        const sorted = this.sortByInjuryStatus(goalieData, "Goalie Name");
 
         sorted.forEach((row, i) => {
             const tr = document.createElement('tr');
@@ -446,11 +441,7 @@ export class NHLMatchupsTable extends BaseTable {
         table.appendChild(thead);
 
         const tbody = document.createElement('tbody');
-        const sorted = [...skaterData].sort((a, b) => {
-            if (a["Split"] === 'Full Season') return -1;
-            if (b["Split"] === 'Full Season') return 1;
-            return 0;
-        });
+        const sorted = this.sortByInjuryStatus(skaterData, "Skater Name");
 
         sorted.forEach((row, i) => {
             const tr = document.createElement('tr');
@@ -475,6 +466,33 @@ export class NHLMatchupsTable extends BaseTable {
         table.appendChild(tbody);
         container.appendChild(table);
         return container;
+    }
+
+    // =========================================================================
+    // INJURY STATUS SORT — parses status from player name
+    // Healthy (no tag) = 0, (DTD) = 1, (Out) = 2, (IR) = 3, (LTIR) = 4
+    // =========================================================================
+
+    getInjuryPriority(name) {
+        if (!name) return 0;
+        const upper = name.toUpperCase();
+        if (upper.includes('(LTIR)')) return 4;
+        if (upper.includes('(IR)')) return 3;
+        if (upper.includes('(OUT)')) return 2;
+        if (upper.includes('(DTD)')) return 1;
+        return 0; // Healthy
+    }
+
+    sortByInjuryStatus(data, nameField) {
+        return [...data].sort((a, b) => {
+            const aPriority = this.getInjuryPriority(a[nameField]);
+            const bPriority = this.getInjuryPriority(b[nameField]);
+            if (aPriority !== bPriority) return aPriority - bPriority;
+            // Within same status, sort alphabetically
+            const aName = (a[nameField] || '').toLowerCase();
+            const bName = (b[nameField] || '').toLowerCase();
+            return aName.localeCompare(bName);
+        });
     }
 
     // =========================================================================
