@@ -303,7 +303,7 @@ export class NHLMatchupsTable extends BaseTable {
             max-height: ${isSmallScreen ? '350px' : '450px'};
             overflow-y: scroll; overflow-x: ${isSmallScreen ? 'auto' : 'hidden'};
             box-sizing: border-box;
-            ${isSmallScreen ? 'max-width: 100%; -webkit-overflow-scrolling: touch;' : ''}
+            ${isSmallScreen ? 'max-width: calc(100vw - 40px); -webkit-overflow-scrolling: touch;' : ''}
         `;
 
         // Inject scrollbar styles once
@@ -349,7 +349,7 @@ export class NHLMatchupsTable extends BaseTable {
 
     // =========================================================================
     // GOALIE SUBTABLE
-    // Stats: Goals Against, Shots Against, Save %, Total Saves, Pts, G, A, SOG
+    // Stats: GAA, Shots Against, Save %, Total Saves
     // Info: Name - Split - Games - Record
     // =========================================================================
 
@@ -381,14 +381,10 @@ export class NHLMatchupsTable extends BaseTable {
         const thead = document.createElement('thead');
         thead.innerHTML = `<tr style="background: #f8f9fa;">
             <th style="padding: ${cellPadding}; text-align: left; border-bottom: 1px solid #ddd; white-space: nowrap;">Player</th>
-            <th style="padding: ${cellPadding}; text-align: center; border-bottom: 1px solid #ddd; min-width: ${statMinWidth};">GA</th>
+            <th style="padding: ${cellPadding}; text-align: center; border-bottom: 1px solid #ddd; min-width: ${statMinWidth};">GAA</th>
             <th style="padding: ${cellPadding}; text-align: center; border-bottom: 1px solid #ddd; min-width: ${statMinWidth};">SA</th>
             <th style="padding: ${cellPadding}; text-align: center; border-bottom: 1px solid #ddd; min-width: ${statMinWidth};">SV%</th>
             <th style="padding: ${cellPadding}; text-align: center; border-bottom: 1px solid #ddd; min-width: ${statMinWidth};">Saves</th>
-            <th style="padding: ${cellPadding}; text-align: center; border-bottom: 1px solid #ddd; min-width: ${statMinWidth};">Pts</th>
-            <th style="padding: ${cellPadding}; text-align: center; border-bottom: 1px solid #ddd; min-width: ${statMinWidth};">G</th>
-            <th style="padding: ${cellPadding}; text-align: center; border-bottom: 1px solid #ddd; min-width: ${statMinWidth};">A</th>
-            <th style="padding: ${cellPadding}; text-align: center; border-bottom: 1px solid #ddd; min-width: ${statMinWidth};">SOG</th>
         </tr>`;
         table.appendChild(thead);
 
@@ -408,14 +404,10 @@ export class NHLMatchupsTable extends BaseTable {
 
             tr.innerHTML = `
                 <td style="padding: ${cellPadding}; text-align: left; white-space: nowrap;">${playerInfo}</td>
-                <td style="padding: ${cellPadding}; text-align: center;">${this.fmtStat(row["Goals Against"])}</td>
+                <td style="padding: ${cellPadding}; text-align: center;">${this.fmtGAA(row["Goals Against"])}</td>
                 <td style="padding: ${cellPadding}; text-align: center;">${this.fmtStat(row["Shots Against"])}</td>
                 <td style="padding: ${cellPadding}; text-align: center;">${this.fmtSavePct(row["Save %"])}</td>
                 <td style="padding: ${cellPadding}; text-align: center;">${this.fmtStat(row["Total Saves"])}</td>
-                <td style="padding: ${cellPadding}; text-align: center;">${this.fmtStat(row["Points"])}</td>
-                <td style="padding: ${cellPadding}; text-align: center;">${this.fmtStat(row["Goals"])}</td>
-                <td style="padding: ${cellPadding}; text-align: center;">${this.fmtStat(row["Assists"])}</td>
-                <td style="padding: ${cellPadding}; text-align: center;">${this.fmtStat(row["SOG"])}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -530,6 +522,12 @@ export class NHLMatchupsTable extends BaseTable {
         return isNaN(num) ? String(value) : num.toFixed(1);
     }
 
+    fmtGAA(value) {
+        if (value == null || value === '' || value === '-') return '-';
+        const num = parseFloat(value);
+        return isNaN(num) ? String(value) : num.toFixed(2);
+    }
+
     fmtSavePct(value) {
         if (value == null || value === '' || value === '-') return '-';
         const num = parseFloat(value);
@@ -631,6 +629,14 @@ export class NHLMatchupsTable extends BaseTable {
         const style = document.createElement('style');
         style.id = 'nhl-matchups-mobile-styles';
         style.textContent = `
+            /* DESKTOP: Always reserve vertical scrollbar space to prevent
+               horizontal scrollbar when expanding subtables */
+            @media screen and (min-width: 1025px) {
+                #table0-container .tabulator .tabulator-tableholder {
+                    overflow-y: scroll !important;
+                }
+            }
+            
             @media screen and (max-width: 1024px) {
                 #table0-container {
                     width: 100% !important;
@@ -646,10 +652,24 @@ export class NHLMatchupsTable extends BaseTable {
                     overflow-x: auto !important;
                     -webkit-overflow-scrolling: touch !important;
                 }
-                #table0-container .tabulator-row { overflow: visible !important; }
-                #table0-container .subrow-container { max-width: 100% !important; overflow-x: auto !important; }
-                #table0-container .subtable-scroll-wrapper { overflow-x: auto !important; max-width: 100% !important; }
-                #table0-container .subtable-scroll-wrapper table { width: auto !important; }
+                #table0-container .tabulator-row {
+                    overflow: visible !important;
+                }
+                /* CRITICAL: Subtables scroll independently within the row.
+                   This prevents the primary table from expanding to subtable width. */
+                #table0-container .subrow-container {
+                    max-width: 100vw !important;
+                    overflow-x: auto !important;
+                    -webkit-overflow-scrolling: touch !important;
+                }
+                #table0-container .subtable-scroll-wrapper {
+                    overflow-x: auto !important;
+                    max-width: calc(100vw - 40px) !important;
+                    -webkit-overflow-scrolling: touch !important;
+                }
+                #table0-container .subtable-scroll-wrapper table {
+                    width: auto !important;
+                }
             }
         `;
         document.head.appendChild(style);
