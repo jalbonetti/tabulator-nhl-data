@@ -6,7 +6,7 @@
 // - Removed: Lineup Status column, Opponent DK Rank, Opponent Pace Rank columns
 // - Removed: Player Per / Opponent Per percentage sections in subtable
 // - Removed: Mode column from Player Stats
-// - Kept: Expandable rows with Matchup Details, Minutes Data, Points/Price Ratio subtables
+// - Kept: Expandable rows with Matchup Details and Minutes Data subtables
 // - Mobile frozen column fix: Does NOT set pixel widths on tabulator element on mobile
 
 import { BaseTable } from './baseTable.js';
@@ -192,8 +192,6 @@ export class NHLPlayerFDTable extends BaseTable {
         const gamesPlayed = data["Player Games Played"] || '-';
         const medianMinutes = this.formatMinutes(data["Player Median Minutes"]);
         const avgMinutes = this.formatMinutes(data["Player Average Minutes"]);
-        const medianRatio = data["Player Median Ratio"] != null ? parseFloat(data["Player Median Ratio"]).toFixed(2) : '-';
-        const highRatio = data["Player High Ratio"] != null ? parseFloat(data["Player High Ratio"]).toFixed(2) : '-';
         
         const isSmallScreen = isMobile() || isTablet();
         const containerGap = isSmallScreen ? '10px' : '15px';
@@ -217,13 +215,6 @@ export class NHLPlayerFDTable extends BaseTable {
                     <div style="font-size: ${fontSize}; color: #333;">
                         <div style="margin-bottom: 4px;"><strong>Median:</strong> ${medianMinutes}</div>
                         <div><strong>Average:</strong> ${avgMinutes}</div>
-                    </div>
-                </div>
-                <div style="background: white; padding: ${cardPadding}; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: inline-block; min-width: fit-content; flex-shrink: 0;">
-                    <h4 style="margin: 0 0 8px 0; color: #1e40af; font-size: ${titleSize}; font-weight: 600;">Points/Price Ratio</h4>
-                    <div style="font-size: ${fontSize}; color: #333;">
-                        <div style="margin-bottom: 4px;"><strong>Median:</strong> ${medianRatio}</div>
-                        <div><strong>High:</strong> ${highRatio}</div>
                     </div>
                 </div>
             </div>
