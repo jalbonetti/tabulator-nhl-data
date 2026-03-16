@@ -1,33 +1,28 @@
 // tables/nhlMatchups.js - NHL Matchups Table
-// Pulls from three Supabase tables: HockeyMatchupsGame, HockeyMatchupsGoalie, HockeyMatchupsSkater
-// Features expandable rows with 4 stacked subtables:
-//   1. Away Team Goalie
-//   2. Home Team Skaters (lineup)
-//   3. Home Team Goalie
-//   4. Away Team Skaters (lineup)
-//
-// Blue theme (#1e40af). No rank coloring. No lineup confirmations.
-// B2B flags present. All stats are averages displayed with 1 decimal.
+// Pulls from: HockeyMatchupsGame, HockeyMatchupsGoalie, HockeyMatchupsSkater
+// Expandable rows with 4 stacked subtables (goalie/skater for each team)
+// Blue theme (#1e40af). Width managed to match subtable content.
+// Desktop: always reserves scrollbar space. Mobile: subtables scroll independently.
 
 import { BaseTable } from './baseTable.js';
 import { isMobile, isTablet } from '../shared/config.js';
 import { API_CONFIG } from '../shared/config.js';
 
+// Subtable layout constants — shared between goalie and skater tables
+const STAT_COL_WIDTH = 60;   // Each stat column (desktop)
+const STAT_COL_WIDTH_MOBILE = 45;
+const NUM_STAT_COLS = 4;     // Both goalie (GAA,SA,SV%,Saves) and skater (Pts,G,A,SOG) have 4
+const SUBTABLE_PADDING = 24; // Container padding (12px × 2)
+const SCROLLBAR_WIDTH = 17;
+const SPREAD_TOTAL_WIDTH = 130; // Fixed width for Spread and Total columns
+
 export class NHLMatchupsTable extends BaseTable {
     constructor(elementId) {
         super(elementId, 'HockeyMatchupsGame');
-
-        this.ENDPOINTS = {
-            GAME: 'HockeyMatchupsGame',
-            GOALIE: 'HockeyMatchupsGoalie',
-            SKATER: 'HockeyMatchupsSkater'
-        };
-
+        this.ENDPOINTS = { GAME: 'HockeyMatchupsGame', GOALIE: 'HockeyMatchupsGoalie', SKATER: 'HockeyMatchupsSkater' };
         this.goalieDataCache = new Map();
         this.skaterDataCache = new Map();
         this.subtableDataReady = false;
-
-        // Abbreviation -> full name
         this.teamNameMap = {
             'ANA': 'Anaheim Ducks', 'BOS': 'Boston Bruins', 'BUF': 'Buffalo Sabres',
             'CGY': 'Calgary Flames', 'CAR': 'Carolina Hurricanes', 'CHI': 'Chicago Blackhawks',
@@ -41,50 +36,45 @@ export class NHLMatchupsTable extends BaseTable {
             'UTA': 'Utah Hockey Club', 'VAN': 'Vancouver Canucks', 'VGK': 'Vegas Golden Knights',
             'WSH': 'Washington Capitals', 'WPG': 'Winnipeg Jets', 'ARI': 'Arizona Coyotes',
         };
-
-        // Full name -> abbreviation (reverse map)
         this.teamAbbrevMap = {};
-        Object.entries(this.teamNameMap).forEach(([abbrev, fullName]) => {
-            this.teamAbbrevMap[fullName] = abbrev;
-        });
+        Object.entries(this.teamNameMap).forEach(([a, f]) => { this.teamAbbrevMap[f] = a; });
     }
 
+    // =========================================================================
+    // INITIALIZE
+    // =========================================================================
     initialize() {
         this.injectMobileStyles();
         const isSmallScreen = isMobile() || isTablet();
-
         const baseConfig = this.getBaseConfig();
-
         const config = {
             ...baseConfig,
-            virtualDom: false, // Required for subtable rendering
+            virtualDom: false,
             pagination: false,
             layoutColumnsOnNewData: false,
             responsiveLayout: false,
             maxHeight: "600px",
             height: "600px",
             placeholder: "Loading matchups...",
-            layout: "fitColumns",
+            layout: "fitData",
             columns: this.getColumns(isSmallScreen),
             initialSort: [{ column: "Matchup ID", dir: "asc" }],
             rowFormatter: this.createRowFormatter(),
             ajaxError: (error) => { console.error("Error loading NHL matchups:", error); }
         };
-
         this.table = new Tabulator(this.elementId, config);
 
-        // CRITICAL: Use event listener instead of config callback — 
-        // config-level dataLoaded doesn't fire reliably with ajaxRequestFunc
         this.table.on("dataLoaded", (data) => {
-            console.log(`NHL Matchups dataLoaded event: ${data.length} records`);
+            console.log(`NHL Matchups dataLoaded: ${data.length} records`);
             this.dataLoaded = true;
             data.forEach(row => { if (row._expanded === undefined) row._expanded = false; });
             this.prefetchSubtableData(data);
-            const element = document.querySelector(this.elementId);
-            if (element) { const ld = element.querySelector('.loading-indicator'); if (ld) ld.remove(); }
+            const el = document.querySelector(this.elementId);
+            if (el) { const ld = el.querySelector('.loading-indicator'); if (ld) ld.remove(); }
+            // Calculate widths after data loads
+            setTimeout(() => this.calculateAndApplyWidths(), 100);
         });
 
-        // Row expansion via click on Matchup column
         this.table.on("cellClick", (e, cell) => {
             if (cell.getColumn().getField() !== "Matchup") return;
             const row = cell.getRow();
@@ -96,75 +86,127 @@ export class NHLMatchupsTable extends BaseTable {
 
         this.table.on("tableBuilt", () => {
             console.log("NHL Matchups table built");
+            window.addEventListener('resize', this.debounce(() => {
+                if (this.table && this.table.getDataCount() > 0) this.calculateAndApplyWidths();
+            }, 250));
         });
     }
 
     // =========================================================================
+    // WIDTH MANAGEMENT
+    // =========================================================================
+    calculateMatchupContentWidth() {
+        if (!this.table) return 300;
+        const data = this.table.getData() || [];
+        if (data.length === 0) return 300;
+        const span = document.createElement('span');
+        span.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font-family:inherit;font-size:inherit;';
+        document.body.appendChild(span);
+        let maxW = 0;
+        data.forEach(row => { span.textContent = row["Matchup"] || ''; if (span.offsetWidth > maxW) maxW = span.offsetWidth; });
+        document.body.removeChild(span);
+        return maxW + 18 + 16; // expand icon + cell padding
+    }
+
+    getSubtableRequiredWidth() {
+        const isSmallScreen = isMobile() || isTablet();
+        const statW = isSmallScreen ? STAT_COL_WIDTH_MOBILE : STAT_COL_WIDTH;
+        // Player info column: longest goalie string ~350px, skater ~300px
+        const playerInfoWidth = isSmallScreen ? 280 : 350;
+        return playerInfoWidth + (NUM_STAT_COLS * statW) + SUBTABLE_PADDING + 20;
+    }
+
+    calculateAndApplyWidths() {
+        if (!this.table) return;
+        const tableElement = this.table.element;
+        if (!tableElement) return;
+        const isSmallScreen = isMobile() || isTablet();
+
+        if (isSmallScreen) {
+            // Mobile: clear pixel widths, let CSS handle it
+            tableElement.style.removeProperty('width');
+            tableElement.style.removeProperty('min-width');
+            tableElement.style.removeProperty('max-width');
+            const tc = tableElement.closest('.table-container');
+            if (tc) { tc.style.width = ''; tc.style.minWidth = ''; tc.style.maxWidth = ''; }
+            return;
+        }
+
+        try {
+            // Force scrollbar reservation FIRST
+            const tableHolder = tableElement.querySelector('.tabulator-tableholder');
+            if (tableHolder) tableHolder.style.overflowY = 'scroll';
+
+            const matchupWidth = this.calculateMatchupContentWidth();
+            const subtableWidth = this.getSubtableRequiredWidth();
+            const targetWidth = Math.max(matchupWidth + SPREAD_TOTAL_WIDTH * 2, subtableWidth);
+            const totalWidth = targetWidth + SCROLLBAR_WIDTH;
+
+            // Set Matchup column to fill remaining space after Spread+Total
+            const matchupColWidth = targetWidth - (SPREAD_TOTAL_WIDTH * 2);
+            const matchupCol = this.table.getColumn("Matchup");
+            const spreadCol = this.table.getColumn("Spread");
+            const totalCol = this.table.getColumn("Total");
+            if (matchupCol) matchupCol.setWidth(matchupColWidth);
+            if (spreadCol) spreadCol.setWidth(SPREAD_TOTAL_WIDTH);
+            if (totalCol) totalCol.setWidth(SPREAD_TOTAL_WIDTH);
+
+            tableElement.style.width = totalWidth + 'px';
+            tableElement.style.minWidth = totalWidth + 'px';
+            tableElement.style.maxWidth = totalWidth + 'px';
+            if (tableHolder) { tableHolder.style.width = totalWidth + 'px'; tableHolder.style.maxWidth = totalWidth + 'px'; }
+            const header = tableElement.querySelector('.tabulator-header');
+            if (header) header.style.width = totalWidth + 'px';
+            const tableContainer = tableElement.closest('.table-container');
+            if (tableContainer) { tableContainer.style.width = 'fit-content'; tableContainer.style.minWidth = 'auto'; tableContainer.style.maxWidth = 'none'; }
+
+            console.log(`NHL Matchups: width=${totalWidth}px (matchup=${matchupColWidth}, spread/total=${SPREAD_TOTAL_WIDTH}, scrollbar=${SCROLLBAR_WIDTH})`);
+        } catch (error) { console.error('NHL Matchups calculateAndApplyWidths error:', error); }
+    }
+
+    forceRecalculateWidths() { this.calculateAndApplyWidths(); }
+    expandNameColumnToFill() { this.calculateAndApplyWidths(); }
+    debounce(func, wait) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => func.apply(this, a), wait); }; }
+
+    // =========================================================================
     // DATA FETCHING
     // =========================================================================
-
     async fetchFromEndpoint(endpoint) {
         const url = `${API_CONFIG.baseURL}${endpoint}`;
         try {
-            const response = await fetch(url, { method: "GET", headers: API_CONFIG.headers });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return await response.json();
-        } catch (error) {
-            console.error(`Error fetching ${endpoint}:`, error);
-            return null;
-        }
+            const r = await fetch(url, { method: "GET", headers: API_CONFIG.headers });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return await r.json();
+        } catch (e) { console.error(`Error fetching ${endpoint}:`, e); return null; }
     }
 
     async prefetchSubtableData(mainData) {
-        console.log(`NHL Matchups: prefetchSubtableData called with ${mainData.length} rows`);
-
+        console.log(`NHL Matchups: prefetching subtable data for ${mainData.length} matchups`);
         try {
-            const [goalieData, skaterData] = await Promise.all([
+            const [gd, sd] = await Promise.all([
                 this.fetchFromEndpoint(this.ENDPOINTS.GOALIE),
                 this.fetchFromEndpoint(this.ENDPOINTS.SKATER)
             ]);
-
-            console.log(`NHL Matchups: Fetched goalie=${goalieData ? goalieData.length : 0}, skater=${skaterData ? skaterData.length : 0}`);
-
-            if (goalieData) {
-                goalieData.forEach(row => {
-                    const mid = String(row["Matchup ID"]);
-                    if (!this.goalieDataCache.has(mid)) this.goalieDataCache.set(mid, []);
-                    this.goalieDataCache.get(mid).push(row);
-                });
-            }
-            if (skaterData) {
-                skaterData.forEach(row => {
-                    const mid = String(row["Matchup ID"]);
-                    if (!this.skaterDataCache.has(mid)) this.skaterDataCache.set(mid, []);
-                    this.skaterDataCache.get(mid).push(row);
-                });
-            }
-
+            console.log(`NHL Matchups: Fetched goalie=${gd ? gd.length : 0}, skater=${sd ? sd.length : 0}`);
+            if (gd) gd.forEach(r => { const m = String(r["Matchup ID"]); if (!this.goalieDataCache.has(m)) this.goalieDataCache.set(m, []); this.goalieDataCache.get(m).push(r); });
+            if (sd) sd.forEach(r => { const m = String(r["Matchup ID"]); if (!this.skaterDataCache.has(m)) this.skaterDataCache.set(m, []); this.skaterDataCache.get(m).push(r); });
             this.subtableDataReady = true;
-            console.log(`NHL Matchups: Cached goalie data for ${this.goalieDataCache.size} matchups, skater data for ${this.skaterDataCache.size} matchups`);
-
-            // Restore any rows that were expanded while data was loading
+            console.log(`NHL Matchups: Cached goalies for ${this.goalieDataCache.size}, skaters for ${this.skaterDataCache.size} matchups`);
             if (this.table) this.restoreExpandedSubtables();
-        } catch (error) {
-            console.error("Error prefetching subtable data:", error);
-        }
+        } catch (e) { console.error("Error prefetching subtable data:", e); }
     }
 
     restoreExpandedSubtables() {
         if (!this.table || !this.subtableDataReady) return;
-        console.log('NHL Matchups: restoreExpandedSubtables called');
         this.table.getRows().forEach(row => {
             const data = row.getData();
             if (data._expanded) {
                 const el = row.getElement();
                 if (!el) return;
-                // Check if there's already a REAL subtable (not just a loading placeholder)
-                const hasRealSubtable = el.querySelector('.subrow-container:not(.subrow-loading)');
-                if (!hasRealSubtable) {
-                    // Remove loading placeholder if present
-                    const loadingEl = el.querySelector('.subrow-loading');
-                    if (loadingEl) loadingEl.remove();
+                const hasReal = el.querySelector('.subrow-container:not(.subrow-loading)');
+                if (!hasReal) {
+                    const loading = el.querySelector('.subrow-loading');
+                    if (loading) loading.remove();
                     this.createAndAppendSubtable(el, data);
                 }
             }
@@ -174,516 +216,252 @@ export class NHLMatchupsTable extends BaseTable {
     // =========================================================================
     // MATCHUP PARSING
     // =========================================================================
-
-    parseMatchup(matchupStr) {
-        if (!matchupStr) return { away: null, home: null };
-        const parts = matchupStr.split('@');
-        if (parts.length !== 2) return { away: null, home: null };
-        const awayTeam = parts[0].trim();
-        const homeTeam = parts[1]
-            .replace(/,?\s*(Mon|Tue|Wed|Thu|Fri|Sat|Sun).*$/i, '')
-            .replace(/,?\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}.*$/i, '')
-            .replace(/\s+\d{1,2}:\d{2}\s*(AM|PM)?.*$/i, '')
-            .replace(/\s*\d{1,2}\/\d{1,2}.*$/, '')
-            .trim();
-        return { away: awayTeam, home: homeTeam };
+    parseMatchup(s) {
+        if (!s) return { away: null, home: null };
+        const p = s.split('@');
+        if (p.length !== 2) return { away: null, home: null };
+        return { away: p[0].trim(), home: p[1].replace(/,?\s*(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec).*$/i, '').replace(/\s+\d{1,2}:\d{2}.*$/i, '').replace(/\s*\d{1,2}\/\d{1,2}.*$/, '').trim() };
     }
-
-    getTeamAbbrev(fullName) {
-        if (!fullName) return null;
-        if (this.teamAbbrevMap[fullName]) return this.teamAbbrevMap[fullName];
-        for (const [name, abbrev] of Object.entries(this.teamAbbrevMap)) {
-            if (fullName.includes(name) || name.includes(fullName)) return abbrev;
-        }
+    getTeamAbbrev(name) {
+        if (!name) return null;
+        if (this.teamAbbrevMap[name]) return this.teamAbbrevMap[name];
+        for (const [n, a] of Object.entries(this.teamAbbrevMap)) { if (name.includes(n) || n.includes(name)) return a; }
         return null;
     }
-
-    getTeamFullName(abbrev) {
-        return this.teamNameMap[abbrev] || abbrev;
-    }
+    getTeamFullName(a) { return this.teamNameMap[a] || a; }
 
     // =========================================================================
     // ROW FORMATTER & EXPANSION
     // =========================================================================
-
     createRowFormatter() {
         const self = this;
         return (row) => {
             const data = row.getData();
-            const rowElement = row.getElement();
-
+            const el = row.getElement();
             if (data._expanded) {
-                rowElement.classList.add('row-expanded');
-                const hasRealSubtable = rowElement.querySelector('.subrow-container:not(.subrow-loading)');
-                if (!hasRealSubtable) {
+                el.classList.add('row-expanded');
+                const hasReal = el.querySelector('.subrow-container:not(.subrow-loading)');
+                if (!hasReal) {
                     if (!self.subtableDataReady) {
-                        // Show loading placeholder only if not already showing one
-                        if (!rowElement.querySelector('.subrow-loading')) {
-                            const loadingEl = document.createElement("div");
-                            loadingEl.classList.add('subrow-container', 'subrow-loading');
-                            loadingEl.style.cssText = 'padding: 15px 20px; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-top: 2px solid #1e40af; text-align: center; color: #666; width: 100%;';
-                            loadingEl.innerHTML = 'Loading matchup data...';
-                            rowElement.appendChild(loadingEl);
+                        if (!el.querySelector('.subrow-loading')) {
+                            const ld = document.createElement("div");
+                            ld.classList.add('subrow-container', 'subrow-loading');
+                            ld.style.cssText = 'padding:15px 20px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border-top:2px solid #1e40af;text-align:center;color:#666;width:100%;';
+                            ld.innerHTML = 'Loading matchup data...';
+                            el.appendChild(ld);
                         }
                         return;
                     }
-                    // Data is ready — remove loading placeholder if present and build real subtable
-                    const loadingEl = rowElement.querySelector('.subrow-loading');
-                    if (loadingEl) loadingEl.remove();
-                    self.createAndAppendSubtable(rowElement, data);
+                    const loading = el.querySelector('.subrow-loading');
+                    if (loading) loading.remove();
+                    self.createAndAppendSubtable(el, data);
                 }
             } else {
-                const existing = rowElement.querySelector('.subrow-container');
-                if (existing) {
-                    existing.remove();
-                    rowElement.classList.remove('row-expanded');
-                }
+                const ex = el.querySelector('.subrow-container');
+                if (ex) { ex.remove(); el.classList.remove('row-expanded'); }
             }
         };
     }
 
     createAndAppendSubtable(rowElement, data) {
         if (rowElement.querySelector('.subrow-container:not(.subrow-loading)')) return;
-        // Remove loading placeholder if present
         const loading = rowElement.querySelector('.subrow-loading');
         if (loading) loading.remove();
-
-        const holderEl = document.createElement("div");
-        holderEl.classList.add('subrow-container');
-        holderEl.style.cssText = 'padding: 15px 20px; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-top: 2px solid #1e40af; margin: 0; display: block; width: 100%; position: relative; z-index: 1;';
-
-        try {
-            this.createSubtableContent(holderEl, data);
-        } catch (error) {
-            console.error("Error creating matchup subtable:", error);
-            holderEl.innerHTML = '<div style="padding: 10px; color: red;">Error loading details</div>';
-        }
-
-        rowElement.appendChild(holderEl);
-        setTimeout(() => {
-            try { rowElement.closest('.tabulator-row') && Tabulator.prototype.findTable(this.elementId)?.[0]?.rowManager?.adjustTableSize(); } catch(e) {}
-        }, 50);
+        const holder = document.createElement("div");
+        holder.classList.add('subrow-container');
+        holder.style.cssText = 'padding:15px 20px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border-top:2px solid #1e40af;margin:0;display:block;width:100%;position:relative;z-index:1;';
+        try { this.createSubtableContent(holder, data); }
+        catch (e) { console.error("Subtable error:", e); holder.innerHTML = '<div style="padding:10px;color:red;">Error loading details</div>'; }
+        rowElement.appendChild(holder);
     }
 
     // =========================================================================
     // SUBTABLE CONTENT — 4 stacked sections
     // =========================================================================
-
     createSubtableContent(container, data) {
         const matchupId = String(data["Matchup ID"]);
         const matchupStr = data["Matchup"];
-
-        const { away: awayTeamFull, home: homeTeamFull } = this.parseMatchup(matchupStr);
-        const awayAbbrev = this.getTeamAbbrev(awayTeamFull);
-        const homeAbbrev = this.getTeamAbbrev(homeTeamFull);
-
+        const { away: awayFull, home: homeFull } = this.parseMatchup(matchupStr);
+        const awayAbbr = this.getTeamAbbrev(awayFull);
+        const homeAbbr = this.getTeamAbbrev(homeFull);
         const goalieData = this.goalieDataCache.get(matchupId) || [];
         const skaterData = this.skaterDataCache.get(matchupId) || [];
-
-        console.log(`NHL Matchups subtable: ID=${matchupId}, away=${awayAbbrev}, home=${homeAbbrev}, goalies=${goalieData.length}, skaters=${skaterData.length}`);
-        if (goalieData.length > 0) console.log('  Goalie teams:', [...new Set(goalieData.map(g => g["Team"]))]);
-        if (skaterData.length > 0) console.log('  Skater teams:', [...new Set(skaterData.map(s => s["Team"]))]);
-
         const b2bAway = data["B2B Away"] === 'Yes' || data["B2BAway"] === 'Yes';
         const b2bHome = data["B2B Home"] === 'Yes' || data["B2BHome"] === 'Yes';
-
-        const awayGoalies = goalieData.filter(g => g["Team"] === awayAbbrev);
-        const homeGoalies = goalieData.filter(g => g["Team"] === homeAbbrev);
-        const awaySkaters = skaterData.filter(s => s["Team"] === awayAbbrev);
-        const homeSkaters = skaterData.filter(s => s["Team"] === homeAbbrev);
-
-        console.log(`  Filtered: awayGoalies=${awayGoalies.length}, homeGoalies=${homeGoalies.length}, awaySkaters=${awaySkaters.length}, homeSkaters=${homeSkaters.length}`);
+        const awayGoalies = goalieData.filter(g => g["Team"] === awayAbbr);
+        const homeGoalies = goalieData.filter(g => g["Team"] === homeAbbr);
+        const awaySkaters = skaterData.filter(s => s["Team"] === awayAbbr);
+        const homeSkaters = skaterData.filter(s => s["Team"] === homeAbbr);
 
         const isSmallScreen = isMobile() || isTablet();
         const wrapper = document.createElement('div');
         wrapper.className = 'subtable-scroll-wrapper';
-        wrapper.style.cssText = `
-            display: flex; flex-direction: column;
-            gap: ${isSmallScreen ? '8px' : '15px'};
-            max-height: ${isSmallScreen ? '350px' : '450px'};
-            overflow-y: scroll; overflow-x: ${isSmallScreen ? 'auto' : 'hidden'};
-            box-sizing: border-box;
-            ${isSmallScreen ? 'max-width: calc(100vw - 40px); -webkit-overflow-scrolling: touch;' : ''}
-        `;
+        wrapper.style.cssText = `display:flex;flex-direction:column;gap:${isSmallScreen ? '8px' : '15px'};max-height:${isSmallScreen ? '350px' : '450px'};overflow-y:scroll;overflow-x:${isSmallScreen ? 'auto' : 'hidden'};box-sizing:border-box;${isSmallScreen ? 'max-width:calc(100vw - 40px);-webkit-overflow-scrolling:touch;' : ''}`;
 
-        // Inject scrollbar styles once
         if (!document.getElementById('nhl-subtable-scrollbar-styles')) {
-            const style = document.createElement('style');
-            style.id = 'nhl-subtable-scrollbar-styles';
-            style.textContent = `
-                .subtable-scroll-wrapper::-webkit-scrollbar { width: 8px; }
-                .subtable-scroll-wrapper::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
-                .subtable-scroll-wrapper::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
-                .subtable-scroll-wrapper::-webkit-scrollbar-thumb:hover { background: #a1a1a1; }
-                .subtable-scroll-wrapper { scrollbar-width: thin; scrollbar-color: #c1c1c1 #f1f1f1; }
-            `;
-            document.head.appendChild(style);
+            const s = document.createElement('style');
+            s.id = 'nhl-subtable-scrollbar-styles';
+            s.textContent = `.subtable-scroll-wrapper::-webkit-scrollbar{width:8px}.subtable-scroll-wrapper::-webkit-scrollbar-track{background:#f1f1f1;border-radius:4px}.subtable-scroll-wrapper::-webkit-scrollbar-thumb{background:#c1c1c1;border-radius:4px}.subtable-scroll-wrapper::-webkit-scrollbar-thumb:hover{background:#a1a1a1}.subtable-scroll-wrapper{scrollbar-width:thin;scrollbar-color:#c1c1c1 #f1f1f1}`;
+            document.head.appendChild(s);
         }
 
-        // 1. Away Goalie
-        wrapper.appendChild(this.createGoalieSubtable(
-            awayGoalies,
-            `${awayTeamFull || awayAbbrev} (Away) Goalie`
-        ));
-
-        // 2. Home Skaters
-        wrapper.appendChild(this.createSkaterSubtable(
-            homeSkaters,
-            `${homeTeamFull || homeAbbrev} (Home) Lineup${b2bHome ? ' - B2B Game' : ''}`
-        ));
-
-        // 3. Home Goalie
-        wrapper.appendChild(this.createGoalieSubtable(
-            homeGoalies,
-            `${homeTeamFull || homeAbbrev} (Home) Goalie`
-        ));
-
-        // 4. Away Skaters
-        wrapper.appendChild(this.createSkaterSubtable(
-            awaySkaters,
-            `${awayTeamFull || awayAbbrev} (Away) Lineup${b2bAway ? ' - B2B Game' : ''}`
-        ));
-
+        // 1. Away Goalie  2. Home Skaters  3. Home Goalie  4. Away Skaters
+        wrapper.appendChild(this.createGoalieSubtable(awayGoalies, `${awayFull || awayAbbr} (Away) Goalie`));
+        wrapper.appendChild(this.createSkaterSubtable(homeSkaters, `${homeFull || homeAbbr} (Home) Lineup${b2bHome ? ' - B2B Game' : ''}`));
+        wrapper.appendChild(this.createGoalieSubtable(homeGoalies, `${homeFull || homeAbbr} (Home) Goalie`));
+        wrapper.appendChild(this.createSkaterSubtable(awaySkaters, `${awayFull || awayAbbr} (Away) Lineup${b2bAway ? ' - B2B Game' : ''}`));
         container.appendChild(wrapper);
     }
 
     // =========================================================================
-    // GOALIE SUBTABLE
-    // Stats: GAA, Shots Against, Save %, Total Saves
-    // Info: Name - Split - Games - Record
+    // GOALIE SUBTABLE — GAA, SA, SV%, Saves
     // =========================================================================
-
     createGoalieSubtable(goalieData, title) {
-        const container = document.createElement('div');
-        container.style.cssText = 'background: white; padding: 12px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);';
-
-        const titleEl = document.createElement('h4');
-        titleEl.textContent = title;
-        titleEl.style.cssText = 'margin: 0 0 10px 0; color: #1e40af; font-size: 13px; font-weight: 600;';
-        container.appendChild(titleEl);
-
+        const c = document.createElement('div');
+        c.style.cssText = 'background:white;padding:12px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,0.1);';
+        const t = document.createElement('h4');
+        t.textContent = title;
+        t.style.cssText = 'margin:0 0 10px 0;color:#1e40af;font-size:13px;font-weight:600;';
+        c.appendChild(t);
         if (!goalieData || goalieData.length === 0) {
-            const noData = document.createElement('div');
-            noData.textContent = 'No goalie data available';
-            noData.style.cssText = 'color: #666; font-size: 12px; padding: 10px;';
-            container.appendChild(noData);
-            return container;
+            const nd = document.createElement('div'); nd.textContent = 'No goalie data available'; nd.style.cssText = 'color:#666;font-size:12px;padding:10px;'; c.appendChild(nd); return c;
         }
-
-        const isSmallScreen = isMobile() || isTablet();
-        const cellPadding = isSmallScreen ? '2px 4px' : '4px 8px';
-        const fontSize = isSmallScreen ? '10px' : '12px';
-        const statMinWidth = isSmallScreen ? '35px' : '50px';
-
-        const table = document.createElement('table');
-        table.style.cssText = `font-size: ${fontSize}; border-collapse: collapse; width: auto;`;
-
-        const thead = document.createElement('thead');
-        thead.innerHTML = `<tr style="background: #f8f9fa;">
-            <th style="padding: ${cellPadding}; text-align: left; border-bottom: 1px solid #ddd; white-space: nowrap;">Player</th>
-            <th style="padding: ${cellPadding}; text-align: center; border-bottom: 1px solid #ddd; min-width: ${statMinWidth};">GAA</th>
-            <th style="padding: ${cellPadding}; text-align: center; border-bottom: 1px solid #ddd; min-width: ${statMinWidth};">SA</th>
-            <th style="padding: ${cellPadding}; text-align: center; border-bottom: 1px solid #ddd; min-width: ${statMinWidth};">SV%</th>
-            <th style="padding: ${cellPadding}; text-align: center; border-bottom: 1px solid #ddd; min-width: ${statMinWidth};">Saves</th>
-        </tr>`;
-        table.appendChild(thead);
-
-        const tbody = document.createElement('tbody');
-        const sorted = this.sortByInjuryStatus(goalieData, "Goalie Name");
-
-        sorted.forEach((row, i) => {
+        const sm = isMobile() || isTablet();
+        const cp = sm ? '2px 4px' : '4px 8px';
+        const fs = sm ? '10px' : '12px';
+        const sw = (sm ? STAT_COL_WIDTH_MOBILE : STAT_COL_WIDTH) + 'px';
+        const tbl = document.createElement('table');
+        tbl.style.cssText = `font-size:${fs};border-collapse:collapse;width:100%;`;
+        const hd = document.createElement('thead');
+        hd.innerHTML = `<tr style="background:#f8f9fa;"><th style="padding:${cp};text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">Player</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;width:${sw};min-width:${sw};">GAA</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;width:${sw};min-width:${sw};">SA</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;width:${sw};min-width:${sw};">SV%</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;width:${sw};min-width:${sw};">Saves</th></tr>`;
+        tbl.appendChild(hd);
+        const tb = document.createElement('tbody');
+        this.sortByInjuryStatus(goalieData, "Goalie Name").forEach((r, i) => {
             const tr = document.createElement('tr');
-            tr.style.cssText = i % 2 === 1 ? 'background: #fafafa;' : '';
-
-            const name = row["Goalie Name"] || '-';
-            const split = this.formatSplit(row["Split"]);
-            const games = row["Games"] || '0';
-            const record = row["W-L-OTL"] || '-';
-            const gamesLabel = parseInt(games, 10) === 1 ? '1 Game' : `${games} Games`;
-            const playerInfo = `${name} - ${split} - ${gamesLabel} - ${record}`;
-
-            tr.innerHTML = `
-                <td style="padding: ${cellPadding}; text-align: left; white-space: nowrap;">${playerInfo}</td>
-                <td style="padding: ${cellPadding}; text-align: center;">${this.fmtGAA(row["Goals Against"])}</td>
-                <td style="padding: ${cellPadding}; text-align: center;">${this.fmtStat(row["Shots Against"])}</td>
-                <td style="padding: ${cellPadding}; text-align: center;">${this.fmtSavePct(row["Save %"])}</td>
-                <td style="padding: ${cellPadding}; text-align: center;">${this.fmtStat(row["Total Saves"])}</td>
-            `;
-            tbody.appendChild(tr);
+            tr.style.cssText = i % 2 === 1 ? 'background:#fafafa;' : '';
+            const gl = parseInt(r["Games"] || '0', 10);
+            const info = `${r["Goalie Name"] || '-'} - ${this.fmtSplit(r["Split"])} - ${gl === 1 ? '1 Game' : gl + ' Games'} - ${r["W-L-OTL"] || '-'}`;
+            tr.innerHTML = `<td style="padding:${cp};text-align:left;white-space:nowrap;">${info}</td><td style="padding:${cp};text-align:center;">${this.fmtGAA(r["Goals Against"])}</td><td style="padding:${cp};text-align:center;">${this.fmt1(r["Shots Against"])}</td><td style="padding:${cp};text-align:center;">${this.fmtSvPct(r["Save %"])}</td><td style="padding:${cp};text-align:center;">${this.fmt1(r["Total Saves"])}</td>`;
+            tb.appendChild(tr);
         });
-        table.appendChild(tbody);
-        container.appendChild(table);
-        return container;
+        tbl.appendChild(tb); c.appendChild(tbl); return c;
     }
 
     // =========================================================================
-    // SKATER SUBTABLE
-    // Stats: Points, Goals, Assists, SOG
-    // Info: Name - Split - Games - TOI min
+    // SKATER SUBTABLE — Pts, G, A, SOG
     // =========================================================================
-
     createSkaterSubtable(skaterData, title) {
-        const container = document.createElement('div');
-        container.style.cssText = 'background: white; padding: 12px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);';
-
-        const titleEl = document.createElement('h4');
-        titleEl.textContent = title;
-        titleEl.style.cssText = 'margin: 0 0 10px 0; color: #1e40af; font-size: 13px; font-weight: 600;';
-        container.appendChild(titleEl);
-
+        const c = document.createElement('div');
+        c.style.cssText = 'background:white;padding:12px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,0.1);';
+        const t = document.createElement('h4');
+        t.textContent = title;
+        t.style.cssText = 'margin:0 0 10px 0;color:#1e40af;font-size:13px;font-weight:600;';
+        c.appendChild(t);
         if (!skaterData || skaterData.length === 0) {
-            const noData = document.createElement('div');
-            noData.textContent = 'No skater data available';
-            noData.style.cssText = 'color: #666; font-size: 12px; padding: 10px;';
-            container.appendChild(noData);
-            return container;
+            const nd = document.createElement('div'); nd.textContent = 'No skater data available'; nd.style.cssText = 'color:#666;font-size:12px;padding:10px;'; c.appendChild(nd); return c;
         }
-
-        const isSmallScreen = isMobile() || isTablet();
-        const cellPadding = isSmallScreen ? '2px 4px' : '4px 8px';
-        const fontSize = isSmallScreen ? '10px' : '12px';
-        const statMinWidth = isSmallScreen ? '35px' : '50px';
-
-        const table = document.createElement('table');
-        table.style.cssText = `font-size: ${fontSize}; border-collapse: collapse; width: auto;`;
-
-        const thead = document.createElement('thead');
-        thead.innerHTML = `<tr style="background: #f8f9fa;">
-            <th style="padding: ${cellPadding}; text-align: left; border-bottom: 1px solid #ddd; white-space: nowrap;">Player</th>
-            <th style="padding: ${cellPadding}; text-align: center; border-bottom: 1px solid #ddd; min-width: ${statMinWidth};">Pts</th>
-            <th style="padding: ${cellPadding}; text-align: center; border-bottom: 1px solid #ddd; min-width: ${statMinWidth};">G</th>
-            <th style="padding: ${cellPadding}; text-align: center; border-bottom: 1px solid #ddd; min-width: ${statMinWidth};">A</th>
-            <th style="padding: ${cellPadding}; text-align: center; border-bottom: 1px solid #ddd; min-width: ${statMinWidth};">SOG</th>
-        </tr>`;
-        table.appendChild(thead);
-
-        const tbody = document.createElement('tbody');
-        const sorted = this.sortByInjuryStatus(skaterData, "Skater Name");
-
-        sorted.forEach((row, i) => {
+        const sm = isMobile() || isTablet();
+        const cp = sm ? '2px 4px' : '4px 8px';
+        const fs = sm ? '10px' : '12px';
+        const sw = (sm ? STAT_COL_WIDTH_MOBILE : STAT_COL_WIDTH) + 'px';
+        const tbl = document.createElement('table');
+        tbl.style.cssText = `font-size:${fs};border-collapse:collapse;width:100%;`;
+        const hd = document.createElement('thead');
+        hd.innerHTML = `<tr style="background:#f8f9fa;"><th style="padding:${cp};text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">Player</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;width:${sw};min-width:${sw};">Pts</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;width:${sw};min-width:${sw};">G</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;width:${sw};min-width:${sw};">A</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;width:${sw};min-width:${sw};">SOG</th></tr>`;
+        tbl.appendChild(hd);
+        const tb = document.createElement('tbody');
+        this.sortByInjuryStatus(skaterData, "Skater Name").forEach((r, i) => {
             const tr = document.createElement('tr');
-            tr.style.cssText = i % 2 === 1 ? 'background: #fafafa;' : '';
-
-            const name = row["Skater Name"] || '-';
-            const split = this.formatSplit(row["Split"]);
-            const games = row["Games"] || '0';
-            const toi = this.fmtStat(row["TOI"]);
-            const gamesLabel = parseInt(games, 10) === 1 ? '1 Game' : `${games} Games`;
-            const playerInfo = `${name} - ${split} - ${gamesLabel} - ${toi} min`;
-
-            tr.innerHTML = `
-                <td style="padding: ${cellPadding}; text-align: left; white-space: nowrap;">${playerInfo}</td>
-                <td style="padding: ${cellPadding}; text-align: center;">${this.fmtStat(row["Points"])}</td>
-                <td style="padding: ${cellPadding}; text-align: center;">${this.fmtStat(row["Goals"])}</td>
-                <td style="padding: ${cellPadding}; text-align: center;">${this.fmtStat(row["Assists"])}</td>
-                <td style="padding: ${cellPadding}; text-align: center;">${this.fmtStat(row["SOG"])}</td>
-            `;
-            tbody.appendChild(tr);
+            tr.style.cssText = i % 2 === 1 ? 'background:#fafafa;' : '';
+            const gl = parseInt(r["Games"] || '0', 10);
+            const info = `${r["Skater Name"] || '-'} - ${this.fmtSplit(r["Split"])} - ${gl === 1 ? '1 Game' : gl + ' Games'} - ${this.fmt1(r["TOI"])} min`;
+            tr.innerHTML = `<td style="padding:${cp};text-align:left;white-space:nowrap;">${info}</td><td style="padding:${cp};text-align:center;">${this.fmt1(r["Points"])}</td><td style="padding:${cp};text-align:center;">${this.fmt1(r["Goals"])}</td><td style="padding:${cp};text-align:center;">${this.fmt1(r["Assists"])}</td><td style="padding:${cp};text-align:center;">${this.fmt1(r["SOG"])}</td>`;
+            tb.appendChild(tr);
         });
-        table.appendChild(tbody);
-        container.appendChild(table);
-        return container;
-    }
-
-    // =========================================================================
-    // INJURY STATUS SORT — parses status from player name
-    // Healthy (no tag) = 0, (DTD) = 1, (Out) = 2, (IR) = 3, (LTIR) = 4
-    // =========================================================================
-
-    getInjuryPriority(name) {
-        if (!name) return 0;
-        const upper = name.toUpperCase();
-        if (upper.includes('(LTIR)')) return 4;
-        if (upper.includes('(IR)')) return 3;
-        if (upper.includes('(OUT)')) return 2;
-        if (upper.includes('(DTD)')) return 1;
-        return 0; // Healthy
-    }
-
-    sortByInjuryStatus(data, nameField) {
-        return [...data].sort((a, b) => {
-            const aPriority = this.getInjuryPriority(a[nameField]);
-            const bPriority = this.getInjuryPriority(b[nameField]);
-            if (aPriority !== bPriority) return aPriority - bPriority;
-            // Within same status, sort alphabetically
-            const aName = (a[nameField] || '').toLowerCase();
-            const bName = (b[nameField] || '').toLowerCase();
-            return aName.localeCompare(bName);
-        });
+        tbl.appendChild(tb); c.appendChild(tbl); return c;
     }
 
     // =========================================================================
     // FORMATTERS
     // =========================================================================
-
-    fmtStat(value) {
-        if (value == null || value === '' || value === '-') return '-';
-        const num = parseFloat(value);
-        return isNaN(num) ? String(value) : num.toFixed(1);
+    getInjuryPriority(name) {
+        if (!name) return 0;
+        const u = name.toUpperCase();
+        if (u.includes('(LTIR)')) return 4;
+        if (u.includes('(IR)')) return 3;
+        if (u.includes('(OUT)')) return 2;
+        if (u.includes('(DTD)')) return 1;
+        return 0;
     }
-
-    fmtGAA(value) {
-        if (value == null || value === '' || value === '-') return '-';
-        const num = parseFloat(value);
-        return isNaN(num) ? String(value) : num.toFixed(2);
+    sortByInjuryStatus(data, nameField) {
+        return [...data].sort((a, b) => {
+            const ap = this.getInjuryPriority(a[nameField]), bp = this.getInjuryPriority(b[nameField]);
+            if (ap !== bp) return ap - bp;
+            return (a[nameField] || '').localeCompare(b[nameField] || '');
+        });
     }
-
-    fmtSavePct(value) {
-        if (value == null || value === '' || value === '-') return '-';
-        const num = parseFloat(value);
-        if (isNaN(num)) return String(value);
-        // If stored as 0.912, show as .912; if stored as 91.2, show as .912
-        if (num > 1) return '.' + (num / 100).toFixed(3).substring(2);
-        return '.' + num.toFixed(3).substring(2);
-    }
-
-    formatSplit(value) {
-        if (!value) return '-';
-        if (value === 'Full Season') return 'Season';
-        if (value === 'Last 30 Days') return 'L30 Days';
-        return value;
-    }
-
-    formatMatchupTotal(value) {
-        if (value == null || value === '' || value === '-') return '-';
-        const str = String(value);
-        if (str.includes('O/U')) {
-            const match = str.match(/O\/U\s*([\d.]+)/);
-            if (match) { const n = parseFloat(match[1]); if (!isNaN(n)) return 'O/U ' + n.toFixed(1); }
-            return str;
-        }
-        const num = parseFloat(str);
-        return isNaN(num) ? str : num.toFixed(1);
-    }
+    fmt1(v) { if (v == null || v === '' || v === '-') return '-'; const n = parseFloat(v); return isNaN(n) ? String(v) : n.toFixed(1); }
+    fmtGAA(v) { if (v == null || v === '' || v === '-') return '-'; const n = parseFloat(v); return isNaN(n) ? String(v) : n.toFixed(2); }
+    fmtSvPct(v) { if (v == null || v === '' || v === '-') return '-'; const n = parseFloat(v); if (isNaN(n)) return String(v); if (n > 1) return '.' + (n / 100).toFixed(3).substring(2); return '.' + n.toFixed(3).substring(2); }
+    fmtSplit(v) { if (!v) return '-'; if (v === 'Full Season') return 'Season'; if (v === 'Last 30 Days') return 'L30 Days'; return v; }
+    fmtTotal(v) { if (v == null || v === '' || v === '-') return '-'; const s = String(v); if (s.includes('O/U')) { const m = s.match(/O\/U\s*([\d.]+)/); if (m) { const n = parseFloat(m[1]); if (!isNaN(n)) return 'O/U ' + n.toFixed(1); } return s; } const n = parseFloat(s); return isNaN(n) ? s : n.toFixed(1); }
 
     // =========================================================================
-    // MATCHUP COLUMN NAME FORMATTER (with expand icon)
+    // MATCHUP FORMATTER (with expand icon)
     // =========================================================================
-
     createMatchupFormatter() {
         return (cell) => {
-            const value = cell.getValue();
-            if (!value) return '-';
-            const data = cell.getRow().getData();
-            const expanded = data._expanded || false;
-            const container = document.createElement('div');
-            container.style.cssText = 'display: flex; align-items: center; cursor: pointer;';
-            const icon = document.createElement('span');
-            icon.className = 'expand-icon';
-            icon.style.cssText = 'margin-right: 6px; font-size: 10px; transition: transform 0.2s; color: #1e40af; display: inline-flex; width: 12px;';
-            icon.innerHTML = expanded ? '&#9660;' : '&#9654;';
-            const text = document.createElement('span');
-            text.textContent = value;
-            container.appendChild(icon);
-            container.appendChild(text);
-            return container;
+            const v = cell.getValue();
+            if (!v) return '-';
+            const d = cell.getRow().getData();
+            const c = document.createElement('div');
+            c.style.cssText = 'display:flex;align-items:center;cursor:pointer;';
+            const i = document.createElement('span');
+            i.className = 'expand-icon';
+            i.style.cssText = 'margin-right:6px;font-size:10px;transition:transform 0.2s;color:#1e40af;display:inline-flex;width:12px;';
+            i.innerHTML = d._expanded ? '&#9660;' : '&#9654;';
+            const t = document.createElement('span');
+            t.textContent = v;
+            c.appendChild(i); c.appendChild(t);
+            return c;
         };
     }
 
     // =========================================================================
     // COLUMNS
     // =========================================================================
-
     getColumns(isSmallScreen = false) {
         return [
-            {
-                title: "Matchup ID", field: "Matchup ID",
-                visible: false, sorter: "number"
-            },
-            {
-                title: "Matchup", field: "Matchup",
-                widthGrow: 2,
-                sorter: "string",
-                headerFilter: true,
-                resizable: false,
-                hozAlign: "left",
-                formatter: this.createMatchupFormatter()
-            },
-            {
-                title: "Spread", field: "Spread",
-                widthGrow: 1,
-                sorter: "string",
-                resizable: false,
-                hozAlign: "center"
-            },
-            {
-                title: "Total", field: "Total",
-                widthGrow: 1,
-                sorter: "string",
-                resizable: false,
-                hozAlign: "center",
-                formatter: (cell) => {
-                    const v = cell.getValue();
-                    return this.formatMatchupTotal(v);
-                }
-            }
+            { title: "Matchup ID", field: "Matchup ID", visible: false, sorter: "number" },
+            { title: "Matchup", field: "Matchup", widthGrow: 0, minWidth: isSmallScreen ? 200 : 350, sorter: "string", headerFilter: true, resizable: false, hozAlign: "left", formatter: this.createMatchupFormatter() },
+            { title: "Spread", field: "Spread", widthGrow: 0, width: isSmallScreen ? 100 : SPREAD_TOTAL_WIDTH, sorter: "string", resizable: false, hozAlign: "center" },
+            { title: "Total", field: "Total", widthGrow: 0, width: isSmallScreen ? 80 : SPREAD_TOTAL_WIDTH, sorter: "string", resizable: false, hozAlign: "center", formatter: (cell) => this.fmtTotal(cell.getValue()) }
         ];
     }
 
     // =========================================================================
     // MOBILE STYLES
     // =========================================================================
-
     injectMobileStyles() {
         if (document.getElementById('nhl-matchups-mobile-styles')) return;
         const style = document.createElement('style');
         style.id = 'nhl-matchups-mobile-styles';
         style.textContent = `
-            /* DESKTOP: Always reserve vertical scrollbar space to prevent
-               horizontal scrollbar when expanding subtables */
             @media screen and (min-width: 1025px) {
                 #table0-container .tabulator .tabulator-tableholder {
                     overflow-y: scroll !important;
                 }
             }
-            
             @media screen and (max-width: 1024px) {
-                #table0-container {
-                    width: 100% !important;
-                    max-width: 100vw !important;
-                    overflow-x: hidden !important;
-                }
-                #table0-container .tabulator {
-                    width: 100% !important;
-                    max-width: 100% !important;
-                    min-width: 0 !important;
-                }
-                #table0-container .tabulator-tableholder {
-                    overflow-x: auto !important;
-                    -webkit-overflow-scrolling: touch !important;
-                }
-                #table0-container .tabulator-row {
-                    overflow: visible !important;
-                }
-                /* CRITICAL: Subtables scroll independently within the row.
-                   This prevents the primary table from expanding to subtable width. */
-                #table0-container .subrow-container {
-                    max-width: 100vw !important;
-                    overflow-x: auto !important;
-                    -webkit-overflow-scrolling: touch !important;
-                }
-                #table0-container .subtable-scroll-wrapper {
-                    overflow-x: auto !important;
-                    max-width: calc(100vw - 40px) !important;
-                    -webkit-overflow-scrolling: touch !important;
-                }
-                #table0-container .subtable-scroll-wrapper table {
-                    width: auto !important;
-                }
+                #table0-container { width:100%!important; max-width:100vw!important; overflow-x:hidden!important; }
+                #table0-container .tabulator { width:100%!important; max-width:100%!important; min-width:0!important; }
+                #table0-container .tabulator-tableholder { overflow-x:auto!important; -webkit-overflow-scrolling:touch!important; }
+                #table0-container .tabulator-row { overflow:visible!important; }
+                #table0-container .subrow-container { max-width:100vw!important; overflow-x:auto!important; -webkit-overflow-scrolling:touch!important; }
+                #table0-container .subtable-scroll-wrapper { overflow-x:auto!important; max-width:calc(100vw - 40px)!important; -webkit-overflow-scrolling:touch!important; }
+                #table0-container .subtable-scroll-wrapper table { width:auto!important; }
             }
         `;
         document.head.appendChild(style);
-    }
-
-    // =========================================================================
-    // WIDTH MANAGEMENT (stubs for TabManager compatibility)
-    // =========================================================================
-
-    forceRecalculateWidths() {}
-    expandNameColumnToFill() {}
-    calculateAndApplyWidths() {}
-    debounce(func, wait) {
-        let timeout;
-        return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func.apply(this, args), wait); };
     }
 }
