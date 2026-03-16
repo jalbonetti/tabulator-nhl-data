@@ -68,17 +68,21 @@ export class NHLMatchupsTable extends BaseTable {
             columns: this.getColumns(isSmallScreen),
             initialSort: [{ column: "Matchup ID", dir: "asc" }],
             rowFormatter: this.createRowFormatter(),
-            dataLoaded: (data) => {
-                this.dataLoaded = true;
-                data.forEach(row => { if (row._expanded === undefined) row._expanded = false; });
-                this.prefetchSubtableData(data);
-                const element = document.querySelector(this.elementId);
-                if (element) { const ld = element.querySelector('.loading-indicator'); if (ld) ld.remove(); }
-            },
             ajaxError: (error) => { console.error("Error loading NHL matchups:", error); }
         };
 
         this.table = new Tabulator(this.elementId, config);
+
+        // CRITICAL: Use event listener instead of config callback — 
+        // config-level dataLoaded doesn't fire reliably with ajaxRequestFunc
+        this.table.on("dataLoaded", (data) => {
+            console.log(`NHL Matchups dataLoaded event: ${data.length} records`);
+            this.dataLoaded = true;
+            data.forEach(row => { if (row._expanded === undefined) row._expanded = false; });
+            this.prefetchSubtableData(data);
+            const element = document.querySelector(this.elementId);
+            if (element) { const ld = element.querySelector('.loading-indicator'); if (ld) ld.remove(); }
+        });
 
         // Row expansion via click on Matchup column
         this.table.on("cellClick", (e, cell) => {
