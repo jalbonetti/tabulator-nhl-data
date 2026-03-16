@@ -1,20 +1,20 @@
 // tables/nhlMatchups.js - NHL Matchups Table
 // Pulls from: HockeyMatchupsGame, HockeyMatchupsGoalie, HockeyMatchupsSkater
 // Expandable rows with 4 stacked subtables (goalie/skater for each team)
-// Blue theme (#1e40af). Width managed to match subtable content.
-// Desktop: always reserves scrollbar space. Mobile: subtables scroll independently.
+// Blue theme (#1e40af).
+//
+// KEY DIFFERENCE FROM NBA: NHL subtables are MUCH smaller (4 stat cols vs 12+).
+// The primary rows drive the table width, NOT the subtables.
+// Uses fitColumns layout — Matchup gets 50%, Spread 25%, Total 25%.
+// Desktop: always reserves vertical scrollbar. Subtables fill container width.
 
 import { BaseTable } from './baseTable.js';
 import { isMobile, isTablet } from '../shared/config.js';
 import { API_CONFIG } from '../shared/config.js';
 
-// Subtable layout constants — shared between goalie and skater tables
-const STAT_COL_WIDTH = 60;   // Each stat column (desktop)
-const STAT_COL_WIDTH_MOBILE = 45;
-const NUM_STAT_COLS = 4;     // Both goalie (GAA,SA,SV%,Saves) and skater (Pts,G,A,SOG) have 4
-const SUBTABLE_PADDING = 24; // Container padding (12px × 2)
-const SCROLLBAR_WIDTH = 17;
-const SPREAD_TOTAL_WIDTH = 130; // Fixed width for Spread and Total columns
+// Stat column widths — shared between goalie and skater subtables
+const STAT_W = 60;
+const STAT_W_MOBILE = 45;
 
 export class NHLMatchupsTable extends BaseTable {
     constructor(elementId) {
@@ -44,7 +44,7 @@ export class NHLMatchupsTable extends BaseTable {
     // INITIALIZE
     // =========================================================================
     initialize() {
-        this.injectMobileStyles();
+        this.injectStyles();
         const isSmallScreen = isMobile() || isTablet();
         const baseConfig = this.getBaseConfig();
         const config = {
@@ -56,7 +56,7 @@ export class NHLMatchupsTable extends BaseTable {
             maxHeight: "600px",
             height: "600px",
             placeholder: "Loading matchups...",
-            layout: "fitData",
+            layout: "fitColumns",  // Primary rows drive width naturally
             columns: this.getColumns(isSmallScreen),
             initialSort: [{ column: "Matchup ID", dir: "asc" }],
             rowFormatter: this.createRowFormatter(),
@@ -71,8 +71,6 @@ export class NHLMatchupsTable extends BaseTable {
             this.prefetchSubtableData(data);
             const el = document.querySelector(this.elementId);
             if (el) { const ld = el.querySelector('.loading-indicator'); if (ld) ld.remove(); }
-            // Calculate widths after data loads
-            setTimeout(() => this.calculateAndApplyWidths(), 100);
         });
 
         this.table.on("cellClick", (e, cell) => {
@@ -86,87 +84,8 @@ export class NHLMatchupsTable extends BaseTable {
 
         this.table.on("tableBuilt", () => {
             console.log("NHL Matchups table built");
-            window.addEventListener('resize', this.debounce(() => {
-                if (this.table && this.table.getDataCount() > 0) this.calculateAndApplyWidths();
-            }, 250));
         });
     }
-
-    // =========================================================================
-    // WIDTH MANAGEMENT
-    // =========================================================================
-    calculateMatchupContentWidth() {
-        if (!this.table) return 300;
-        const data = this.table.getData() || [];
-        if (data.length === 0) return 300;
-        const span = document.createElement('span');
-        span.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font-family:inherit;font-size:inherit;';
-        document.body.appendChild(span);
-        let maxW = 0;
-        data.forEach(row => { span.textContent = row["Matchup"] || ''; if (span.offsetWidth > maxW) maxW = span.offsetWidth; });
-        document.body.removeChild(span);
-        return maxW + 18 + 16; // expand icon + cell padding
-    }
-
-    getSubtableRequiredWidth() {
-        const isSmallScreen = isMobile() || isTablet();
-        const statW = isSmallScreen ? STAT_COL_WIDTH_MOBILE : STAT_COL_WIDTH;
-        // Player info column: longest goalie string ~350px, skater ~300px
-        const playerInfoWidth = isSmallScreen ? 280 : 350;
-        return playerInfoWidth + (NUM_STAT_COLS * statW) + SUBTABLE_PADDING + 20;
-    }
-
-    calculateAndApplyWidths() {
-        if (!this.table) return;
-        const tableElement = this.table.element;
-        if (!tableElement) return;
-        const isSmallScreen = isMobile() || isTablet();
-
-        if (isSmallScreen) {
-            // Mobile: clear pixel widths, let CSS handle it
-            tableElement.style.removeProperty('width');
-            tableElement.style.removeProperty('min-width');
-            tableElement.style.removeProperty('max-width');
-            const tc = tableElement.closest('.table-container');
-            if (tc) { tc.style.width = ''; tc.style.minWidth = ''; tc.style.maxWidth = ''; }
-            return;
-        }
-
-        try {
-            // Force scrollbar reservation FIRST
-            const tableHolder = tableElement.querySelector('.tabulator-tableholder');
-            if (tableHolder) tableHolder.style.overflowY = 'scroll';
-
-            const matchupWidth = this.calculateMatchupContentWidth();
-            const subtableWidth = this.getSubtableRequiredWidth();
-            const targetWidth = Math.max(matchupWidth + SPREAD_TOTAL_WIDTH * 2, subtableWidth);
-            const totalWidth = targetWidth + SCROLLBAR_WIDTH;
-
-            // Set Matchup column to fill remaining space after Spread+Total
-            const matchupColWidth = targetWidth - (SPREAD_TOTAL_WIDTH * 2);
-            const matchupCol = this.table.getColumn("Matchup");
-            const spreadCol = this.table.getColumn("Spread");
-            const totalCol = this.table.getColumn("Total");
-            if (matchupCol) matchupCol.setWidth(matchupColWidth);
-            if (spreadCol) spreadCol.setWidth(SPREAD_TOTAL_WIDTH);
-            if (totalCol) totalCol.setWidth(SPREAD_TOTAL_WIDTH);
-
-            tableElement.style.width = totalWidth + 'px';
-            tableElement.style.minWidth = totalWidth + 'px';
-            tableElement.style.maxWidth = totalWidth + 'px';
-            if (tableHolder) { tableHolder.style.width = totalWidth + 'px'; tableHolder.style.maxWidth = totalWidth + 'px'; }
-            const header = tableElement.querySelector('.tabulator-header');
-            if (header) header.style.width = totalWidth + 'px';
-            const tableContainer = tableElement.closest('.table-container');
-            if (tableContainer) { tableContainer.style.width = 'fit-content'; tableContainer.style.minWidth = 'auto'; tableContainer.style.maxWidth = 'none'; }
-
-            console.log(`NHL Matchups: width=${totalWidth}px (matchup=${matchupColWidth}, spread/total=${SPREAD_TOTAL_WIDTH}, scrollbar=${SCROLLBAR_WIDTH})`);
-        } catch (error) { console.error('NHL Matchups calculateAndApplyWidths error:', error); }
-    }
-
-    forceRecalculateWidths() { this.calculateAndApplyWidths(); }
-    expandNameColumnToFill() { this.calculateAndApplyWidths(); }
-    debounce(func, wait) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => func.apply(this, a), wait); }; }
 
     // =========================================================================
     // DATA FETCHING
@@ -181,7 +100,7 @@ export class NHLMatchupsTable extends BaseTable {
     }
 
     async prefetchSubtableData(mainData) {
-        console.log(`NHL Matchups: prefetching subtable data for ${mainData.length} matchups`);
+        console.log(`NHL Matchups: prefetching subtable data`);
         try {
             const [gd, sd] = await Promise.all([
                 this.fetchFromEndpoint(this.ENDPOINTS.GOALIE),
@@ -203,10 +122,9 @@ export class NHLMatchupsTable extends BaseTable {
             if (data._expanded) {
                 const el = row.getElement();
                 if (!el) return;
-                const hasReal = el.querySelector('.subrow-container:not(.subrow-loading)');
-                if (!hasReal) {
-                    const loading = el.querySelector('.subrow-loading');
-                    if (loading) loading.remove();
+                if (!el.querySelector('.subrow-container:not(.subrow-loading)')) {
+                    const ld = el.querySelector('.subrow-loading');
+                    if (ld) ld.remove();
                     this.createAndAppendSubtable(el, data);
                 }
             }
@@ -214,13 +132,17 @@ export class NHLMatchupsTable extends BaseTable {
     }
 
     // =========================================================================
-    // MATCHUP PARSING
+    // MATCHUP PARSING & TEAM ABBREVIATION
     // =========================================================================
     parseMatchup(s) {
         if (!s) return { away: null, home: null };
         const p = s.split('@');
         if (p.length !== 2) return { away: null, home: null };
-        return { away: p[0].trim(), home: p[1].replace(/,?\s*(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec).*$/i, '').replace(/\s+\d{1,2}:\d{2}.*$/i, '').replace(/\s*\d{1,2}\/\d{1,2}.*$/, '').trim() };
+        return {
+            away: p[0].trim(),
+            home: p[1].replace(/,?\s*(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec).*$/i, '')
+                      .replace(/\s+\d{1,2}:\d{2}.*$/i, '').replace(/\s*\d{1,2}\/\d{1,2}.*$/, '').trim()
+        };
     }
     getTeamAbbrev(name) {
         if (!name) return null;
@@ -229,6 +151,21 @@ export class NHLMatchupsTable extends BaseTable {
         return null;
     }
     getTeamFullName(a) { return this.teamNameMap[a] || a; }
+
+    // Abbreviate team names in a spread string, e.g. "New Jersey Devils -1.5" -> "NJD -1.5"
+    abbreviateSpread(spread) {
+        if (!spread) return '-';
+        let result = spread;
+        // Sort by full name length descending to avoid partial matches
+        const sorted = Object.entries(this.teamAbbrevMap).sort((a, b) => b[0].length - a[0].length);
+        for (const [fullName, abbrev] of sorted) {
+            if (result.includes(fullName)) {
+                result = result.replace(fullName, abbrev);
+                break;
+            }
+        }
+        return result;
+    }
 
     // =========================================================================
     // ROW FORMATTER & EXPANSION
@@ -240,8 +177,7 @@ export class NHLMatchupsTable extends BaseTable {
             const el = row.getElement();
             if (data._expanded) {
                 el.classList.add('row-expanded');
-                const hasReal = el.querySelector('.subrow-container:not(.subrow-loading)');
-                if (!hasReal) {
+                if (!el.querySelector('.subrow-container:not(.subrow-loading)')) {
                     if (!self.subtableDataReady) {
                         if (!el.querySelector('.subrow-loading')) {
                             const ld = document.createElement("div");
@@ -296,7 +232,7 @@ export class NHLMatchupsTable extends BaseTable {
         const isSmallScreen = isMobile() || isTablet();
         const wrapper = document.createElement('div');
         wrapper.className = 'subtable-scroll-wrapper';
-        wrapper.style.cssText = `display:flex;flex-direction:column;gap:${isSmallScreen ? '8px' : '15px'};max-height:${isSmallScreen ? '350px' : '450px'};overflow-y:scroll;overflow-x:${isSmallScreen ? 'auto' : 'hidden'};box-sizing:border-box;${isSmallScreen ? 'max-width:calc(100vw - 40px);-webkit-overflow-scrolling:touch;' : ''}`;
+        wrapper.style.cssText = `display:flex;flex-direction:column;gap:${isSmallScreen ? '8px' : '15px'};max-height:${isSmallScreen ? '350px' : '450px'};overflow-y:auto;overflow-x:hidden;box-sizing:border-box;`;
 
         if (!document.getElementById('nhl-subtable-scrollbar-styles')) {
             const s = document.createElement('style');
@@ -305,7 +241,6 @@ export class NHLMatchupsTable extends BaseTable {
             document.head.appendChild(s);
         }
 
-        // 1. Away Goalie  2. Home Skaters  3. Home Goalie  4. Away Skaters
         wrapper.appendChild(this.createGoalieSubtable(awayGoalies, `${awayFull || awayAbbr} (Away) Goalie`));
         wrapper.appendChild(this.createSkaterSubtable(homeSkaters, `${homeFull || homeAbbr} (Home) Lineup${b2bHome ? ' - B2B Game' : ''}`));
         wrapper.appendChild(this.createGoalieSubtable(homeGoalies, `${homeFull || homeAbbr} (Home) Goalie`));
@@ -319,21 +254,25 @@ export class NHLMatchupsTable extends BaseTable {
     createGoalieSubtable(goalieData, title) {
         const c = document.createElement('div');
         c.style.cssText = 'background:white;padding:12px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,0.1);';
-        const t = document.createElement('h4');
-        t.textContent = title;
+        const t = document.createElement('h4'); t.textContent = title;
         t.style.cssText = 'margin:0 0 10px 0;color:#1e40af;font-size:13px;font-weight:600;';
         c.appendChild(t);
         if (!goalieData || goalieData.length === 0) {
-            const nd = document.createElement('div'); nd.textContent = 'No goalie data available'; nd.style.cssText = 'color:#666;font-size:12px;padding:10px;'; c.appendChild(nd); return c;
+            const nd = document.createElement('div'); nd.textContent = 'No goalie data available';
+            nd.style.cssText = 'color:#666;font-size:12px;padding:10px;'; c.appendChild(nd); return c;
         }
         const sm = isMobile() || isTablet();
         const cp = sm ? '2px 4px' : '4px 8px';
         const fs = sm ? '10px' : '12px';
-        const sw = (sm ? STAT_COL_WIDTH_MOBILE : STAT_COL_WIDTH) + 'px';
+        const sw = (sm ? STAT_W_MOBILE : STAT_W) + 'px';
+
         const tbl = document.createElement('table');
-        tbl.style.cssText = `font-size:${fs};border-collapse:collapse;width:100%;`;
+        tbl.style.cssText = `font-size:${fs};border-collapse:collapse;width:100%;table-layout:fixed;`;
+        const colgroup = document.createElement('colgroup');
+        colgroup.innerHTML = `<col style="width:auto;"><col style="width:${sw};"><col style="width:${sw};"><col style="width:${sw};"><col style="width:${sw};">`;
+        tbl.appendChild(colgroup);
         const hd = document.createElement('thead');
-        hd.innerHTML = `<tr style="background:#f8f9fa;"><th style="padding:${cp};text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">Player</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;width:${sw};min-width:${sw};">GAA</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;width:${sw};min-width:${sw};">SA</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;width:${sw};min-width:${sw};">SV%</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;width:${sw};min-width:${sw};">Saves</th></tr>`;
+        hd.innerHTML = `<tr style="background:#f8f9fa;"><th style="padding:${cp};text-align:left;border-bottom:1px solid #ddd;">Player</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;">GAA</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;">SA</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;">SV%</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;">Saves</th></tr>`;
         tbl.appendChild(hd);
         const tb = document.createElement('tbody');
         this.sortByInjuryStatus(goalieData, "Goalie Name").forEach((r, i) => {
@@ -341,7 +280,7 @@ export class NHLMatchupsTable extends BaseTable {
             tr.style.cssText = i % 2 === 1 ? 'background:#fafafa;' : '';
             const gl = parseInt(r["Games"] || '0', 10);
             const info = `${r["Goalie Name"] || '-'} - ${this.fmtSplit(r["Split"])} - ${gl === 1 ? '1 Game' : gl + ' Games'} - ${r["W-L-OTL"] || '-'}`;
-            tr.innerHTML = `<td style="padding:${cp};text-align:left;white-space:nowrap;">${info}</td><td style="padding:${cp};text-align:center;">${this.fmtGAA(r["Goals Against"])}</td><td style="padding:${cp};text-align:center;">${this.fmt1(r["Shots Against"])}</td><td style="padding:${cp};text-align:center;">${this.fmtSvPct(r["Save %"])}</td><td style="padding:${cp};text-align:center;">${this.fmt1(r["Total Saves"])}</td>`;
+            tr.innerHTML = `<td style="padding:${cp};text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${info}</td><td style="padding:${cp};text-align:center;">${this.fmtGAA(r["Goals Against"])}</td><td style="padding:${cp};text-align:center;">${this.fmt1(r["Shots Against"])}</td><td style="padding:${cp};text-align:center;">${this.fmtSvPct(r["Save %"])}</td><td style="padding:${cp};text-align:center;">${this.fmt1(r["Total Saves"])}</td>`;
             tb.appendChild(tr);
         });
         tbl.appendChild(tb); c.appendChild(tbl); return c;
@@ -353,21 +292,25 @@ export class NHLMatchupsTable extends BaseTable {
     createSkaterSubtable(skaterData, title) {
         const c = document.createElement('div');
         c.style.cssText = 'background:white;padding:12px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,0.1);';
-        const t = document.createElement('h4');
-        t.textContent = title;
+        const t = document.createElement('h4'); t.textContent = title;
         t.style.cssText = 'margin:0 0 10px 0;color:#1e40af;font-size:13px;font-weight:600;';
         c.appendChild(t);
         if (!skaterData || skaterData.length === 0) {
-            const nd = document.createElement('div'); nd.textContent = 'No skater data available'; nd.style.cssText = 'color:#666;font-size:12px;padding:10px;'; c.appendChild(nd); return c;
+            const nd = document.createElement('div'); nd.textContent = 'No skater data available';
+            nd.style.cssText = 'color:#666;font-size:12px;padding:10px;'; c.appendChild(nd); return c;
         }
         const sm = isMobile() || isTablet();
         const cp = sm ? '2px 4px' : '4px 8px';
         const fs = sm ? '10px' : '12px';
-        const sw = (sm ? STAT_COL_WIDTH_MOBILE : STAT_COL_WIDTH) + 'px';
+        const sw = (sm ? STAT_W_MOBILE : STAT_W) + 'px';
+
         const tbl = document.createElement('table');
-        tbl.style.cssText = `font-size:${fs};border-collapse:collapse;width:100%;`;
+        tbl.style.cssText = `font-size:${fs};border-collapse:collapse;width:100%;table-layout:fixed;`;
+        const colgroup = document.createElement('colgroup');
+        colgroup.innerHTML = `<col style="width:auto;"><col style="width:${sw};"><col style="width:${sw};"><col style="width:${sw};"><col style="width:${sw};">`;
+        tbl.appendChild(colgroup);
         const hd = document.createElement('thead');
-        hd.innerHTML = `<tr style="background:#f8f9fa;"><th style="padding:${cp};text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">Player</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;width:${sw};min-width:${sw};">Pts</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;width:${sw};min-width:${sw};">G</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;width:${sw};min-width:${sw};">A</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;width:${sw};min-width:${sw};">SOG</th></tr>`;
+        hd.innerHTML = `<tr style="background:#f8f9fa;"><th style="padding:${cp};text-align:left;border-bottom:1px solid #ddd;">Player</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;">Pts</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;">G</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;">A</th><th style="padding:${cp};text-align:center;border-bottom:1px solid #ddd;">SOG</th></tr>`;
         tbl.appendChild(hd);
         const tb = document.createElement('tbody');
         this.sortByInjuryStatus(skaterData, "Skater Name").forEach((r, i) => {
@@ -375,7 +318,7 @@ export class NHLMatchupsTable extends BaseTable {
             tr.style.cssText = i % 2 === 1 ? 'background:#fafafa;' : '';
             const gl = parseInt(r["Games"] || '0', 10);
             const info = `${r["Skater Name"] || '-'} - ${this.fmtSplit(r["Split"])} - ${gl === 1 ? '1 Game' : gl + ' Games'} - ${this.fmt1(r["TOI"])} min`;
-            tr.innerHTML = `<td style="padding:${cp};text-align:left;white-space:nowrap;">${info}</td><td style="padding:${cp};text-align:center;">${this.fmt1(r["Points"])}</td><td style="padding:${cp};text-align:center;">${this.fmt1(r["Goals"])}</td><td style="padding:${cp};text-align:center;">${this.fmt1(r["Assists"])}</td><td style="padding:${cp};text-align:center;">${this.fmt1(r["SOG"])}</td>`;
+            tr.innerHTML = `<td style="padding:${cp};text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${info}</td><td style="padding:${cp};text-align:center;">${this.fmt1(r["Points"])}</td><td style="padding:${cp};text-align:center;">${this.fmt1(r["Goals"])}</td><td style="padding:${cp};text-align:center;">${this.fmt1(r["Assists"])}</td><td style="padding:${cp};text-align:center;">${this.fmt1(r["SOG"])}</td>`;
             tb.appendChild(tr);
         });
         tbl.appendChild(tb); c.appendChild(tbl); return c;
@@ -387,10 +330,8 @@ export class NHLMatchupsTable extends BaseTable {
     getInjuryPriority(name) {
         if (!name) return 0;
         const u = name.toUpperCase();
-        if (u.includes('(LTIR)')) return 4;
-        if (u.includes('(IR)')) return 3;
-        if (u.includes('(OUT)')) return 2;
-        if (u.includes('(DTD)')) return 1;
+        if (u.includes('(LTIR)')) return 4; if (u.includes('(IR)')) return 3;
+        if (u.includes('(OUT)')) return 2; if (u.includes('(DTD)')) return 1;
         return 0;
     }
     sortByInjuryStatus(data, nameField) {
@@ -406,9 +347,6 @@ export class NHLMatchupsTable extends BaseTable {
     fmtSplit(v) { if (!v) return '-'; if (v === 'Full Season') return 'Season'; if (v === 'Last 30 Days') return 'L30 Days'; return v; }
     fmtTotal(v) { if (v == null || v === '' || v === '-') return '-'; const s = String(v); if (s.includes('O/U')) { const m = s.match(/O\/U\s*([\d.]+)/); if (m) { const n = parseFloat(m[1]); if (!isNaN(n)) return 'O/U ' + n.toFixed(1); } return s; } const n = parseFloat(s); return isNaN(n) ? s : n.toFixed(1); }
 
-    // =========================================================================
-    // MATCHUP FORMATTER (with expand icon)
-    // =========================================================================
     createMatchupFormatter() {
         return (cell) => {
             const v = cell.getValue();
@@ -428,40 +366,56 @@ export class NHLMatchupsTable extends BaseTable {
     }
 
     // =========================================================================
-    // COLUMNS
+    // COLUMNS — fitColumns: Matchup 50%, Spread 25%, Total 25%
     // =========================================================================
     getColumns(isSmallScreen = false) {
+        const self = this;
         return [
             { title: "Matchup ID", field: "Matchup ID", visible: false, sorter: "number" },
-            { title: "Matchup", field: "Matchup", widthGrow: 0, minWidth: isSmallScreen ? 200 : 350, sorter: "string", headerFilter: true, resizable: false, hozAlign: "left", formatter: this.createMatchupFormatter() },
-            { title: "Spread", field: "Spread", widthGrow: 0, width: isSmallScreen ? 100 : SPREAD_TOTAL_WIDTH, sorter: "string", resizable: false, hozAlign: "center" },
-            { title: "Total", field: "Total", widthGrow: 0, width: isSmallScreen ? 80 : SPREAD_TOTAL_WIDTH, sorter: "string", resizable: false, hozAlign: "center", formatter: (cell) => this.fmtTotal(cell.getValue()) }
+            { title: "Matchup", field: "Matchup", widthGrow: 2, sorter: "string", headerFilter: true, resizable: false, hozAlign: "left", formatter: this.createMatchupFormatter() },
+            { title: "Spread", field: "Spread", widthGrow: 1, sorter: "string", resizable: false, hozAlign: "center",
+                formatter: (cell) => self.abbreviateSpread(cell.getValue()) },
+            { title: "Total", field: "Total", widthGrow: 1, sorter: "string", resizable: false, hozAlign: "center",
+                formatter: (cell) => self.fmtTotal(cell.getValue()) }
         ];
     }
 
     // =========================================================================
-    // MOBILE STYLES
+    // STYLES — desktop scrollbar reservation + mobile containment
     // =========================================================================
-    injectMobileStyles() {
-        if (document.getElementById('nhl-matchups-mobile-styles')) return;
+    injectStyles() {
+        if (document.getElementById('nhl-matchups-styles')) return;
         const style = document.createElement('style');
-        style.id = 'nhl-matchups-mobile-styles';
+        style.id = 'nhl-matchups-styles';
         style.textContent = `
+            /* Desktop: ALWAYS reserve vertical scrollbar space */
             @media screen and (min-width: 1025px) {
                 #table0-container .tabulator .tabulator-tableholder {
                     overflow-y: scroll !important;
                 }
             }
+            /* Mobile: subtables contained, rows visible for expansion */
             @media screen and (max-width: 1024px) {
-                #table0-container { width:100%!important; max-width:100vw!important; overflow-x:hidden!important; }
-                #table0-container .tabulator { width:100%!important; max-width:100%!important; min-width:0!important; }
-                #table0-container .tabulator-tableholder { overflow-x:auto!important; -webkit-overflow-scrolling:touch!important; }
-                #table0-container .tabulator-row { overflow:visible!important; }
-                #table0-container .subrow-container { max-width:100vw!important; overflow-x:auto!important; -webkit-overflow-scrolling:touch!important; }
-                #table0-container .subtable-scroll-wrapper { overflow-x:auto!important; max-width:calc(100vw - 40px)!important; -webkit-overflow-scrolling:touch!important; }
-                #table0-container .subtable-scroll-wrapper table { width:auto!important; }
+                #table0-container .tabulator-row { overflow: visible !important; }
+                #table0-container .subrow-container {
+                    width: 100% !important;
+                    overflow-x: auto !important;
+                    -webkit-overflow-scrolling: touch !important;
+                }
+                #table0-container .subtable-scroll-wrapper {
+                    overflow-x: auto !important;
+                    -webkit-overflow-scrolling: touch !important;
+                }
             }
         `;
         document.head.appendChild(style);
     }
+
+    // =========================================================================
+    // WIDTH STUBS for TabManager compatibility
+    // =========================================================================
+    forceRecalculateWidths() {}
+    expandNameColumnToFill() {}
+    calculateAndApplyWidths() {}
+    debounce(func, wait) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => func.apply(this, a), wait); }; }
 }
