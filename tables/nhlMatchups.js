@@ -112,14 +112,15 @@ export class NHLMatchupsTable extends BaseTable {
     }
 
     async prefetchSubtableData(mainData) {
-        const matchupIds = mainData.map(r => r["Matchup ID"]).filter(id => id != null);
-        if (matchupIds.length === 0) return;
+        console.log(`NHL Matchups: prefetchSubtableData called with ${mainData.length} rows`);
 
         try {
             const [goalieData, skaterData] = await Promise.all([
                 this.fetchFromEndpoint(this.ENDPOINTS.GOALIE),
                 this.fetchFromEndpoint(this.ENDPOINTS.SKATER)
             ]);
+
+            console.log(`NHL Matchups: Fetched goalie=${goalieData ? goalieData.length : 0}, skater=${skaterData ? skaterData.length : 0}`);
 
             if (goalieData) {
                 goalieData.forEach(row => {
@@ -148,11 +149,18 @@ export class NHLMatchupsTable extends BaseTable {
 
     restoreExpandedSubtables() {
         if (!this.table || !this.subtableDataReady) return;
+        console.log('NHL Matchups: restoreExpandedSubtables called');
         this.table.getRows().forEach(row => {
             const data = row.getData();
             if (data._expanded) {
                 const el = row.getElement();
-                if (el && !el.querySelector('.subrow-container')) {
+                if (!el) return;
+                // Check if there's already a REAL subtable (not just a loading placeholder)
+                const hasRealSubtable = el.querySelector('.subrow-container:not(.subrow-loading)');
+                if (!hasRealSubtable) {
+                    // Remove loading placeholder if present
+                    const loadingEl = el.querySelector('.subrow-loading');
+                    if (loadingEl) loadingEl.remove();
                     this.createAndAppendSubtable(el, data);
                 }
             }
@@ -202,15 +210,22 @@ export class NHLMatchupsTable extends BaseTable {
 
             if (data._expanded) {
                 rowElement.classList.add('row-expanded');
-                if (!rowElement.querySelector('.subrow-container')) {
+                const hasRealSubtable = rowElement.querySelector('.subrow-container:not(.subrow-loading)');
+                if (!hasRealSubtable) {
                     if (!self.subtableDataReady) {
-                        const loadingEl = document.createElement("div");
-                        loadingEl.classList.add('subrow-container', 'subrow-loading');
-                        loadingEl.style.cssText = 'padding: 15px 20px; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-top: 2px solid #1e40af; text-align: center; color: #666; width: 100%;';
-                        loadingEl.innerHTML = 'Loading matchup data...';
-                        rowElement.appendChild(loadingEl);
+                        // Show loading placeholder only if not already showing one
+                        if (!rowElement.querySelector('.subrow-loading')) {
+                            const loadingEl = document.createElement("div");
+                            loadingEl.classList.add('subrow-container', 'subrow-loading');
+                            loadingEl.style.cssText = 'padding: 15px 20px; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-top: 2px solid #1e40af; text-align: center; color: #666; width: 100%;';
+                            loadingEl.innerHTML = 'Loading matchup data...';
+                            rowElement.appendChild(loadingEl);
+                        }
                         return;
                     }
+                    // Data is ready — remove loading placeholder if present and build real subtable
+                    const loadingEl = rowElement.querySelector('.subrow-loading');
+                    if (loadingEl) loadingEl.remove();
                     self.createAndAppendSubtable(rowElement, data);
                 }
             } else {
