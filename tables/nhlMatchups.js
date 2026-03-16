@@ -128,14 +128,14 @@ export class NHLMatchupsTable extends BaseTable {
 
             if (goalieData) {
                 goalieData.forEach(row => {
-                    const mid = row["Matchup ID"];
+                    const mid = String(row["Matchup ID"]);
                     if (!this.goalieDataCache.has(mid)) this.goalieDataCache.set(mid, []);
                     this.goalieDataCache.get(mid).push(row);
                 });
             }
             if (skaterData) {
                 skaterData.forEach(row => {
-                    const mid = row["Matchup ID"];
+                    const mid = String(row["Matchup ID"]);
                     if (!this.skaterDataCache.has(mid)) this.skaterDataCache.set(mid, []);
                     this.skaterDataCache.get(mid).push(row);
                 });
@@ -270,7 +270,7 @@ export class NHLMatchupsTable extends BaseTable {
     // =========================================================================
 
     createSubtableContent(container, data) {
-        const matchupId = data["Matchup ID"];
+        const matchupId = String(data["Matchup ID"]);
         const matchupStr = data["Matchup"];
 
         const { away: awayTeamFull, home: homeTeamFull } = this.parseMatchup(matchupStr);
@@ -280,6 +280,10 @@ export class NHLMatchupsTable extends BaseTable {
         const goalieData = this.goalieDataCache.get(matchupId) || [];
         const skaterData = this.skaterDataCache.get(matchupId) || [];
 
+        console.log(`NHL Matchups subtable: ID=${matchupId}, away=${awayAbbrev}, home=${homeAbbrev}, goalies=${goalieData.length}, skaters=${skaterData.length}`);
+        if (goalieData.length > 0) console.log('  Goalie teams:', [...new Set(goalieData.map(g => g["Team"]))]);
+        if (skaterData.length > 0) console.log('  Skater teams:', [...new Set(skaterData.map(s => s["Team"]))]);
+
         const b2bAway = data["B2B Away"] === 'Yes' || data["B2BAway"] === 'Yes';
         const b2bHome = data["B2B Home"] === 'Yes' || data["B2BHome"] === 'Yes';
 
@@ -287,6 +291,8 @@ export class NHLMatchupsTable extends BaseTable {
         const homeGoalies = goalieData.filter(g => g["Team"] === homeAbbrev);
         const awaySkaters = skaterData.filter(s => s["Team"] === awayAbbrev);
         const homeSkaters = skaterData.filter(s => s["Team"] === homeAbbrev);
+
+        console.log(`  Filtered: awayGoalies=${awayGoalies.length}, homeGoalies=${homeGoalies.length}, awaySkaters=${awaySkaters.length}, homeSkaters=${homeSkaters.length}`);
 
         const isSmallScreen = isMobile() || isTablet();
         const wrapper = document.createElement('div');
