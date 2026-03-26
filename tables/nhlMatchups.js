@@ -154,7 +154,7 @@ export class NHLMatchupsTable extends BaseTable {
             const w = ctx.measureText(row["Matchup"] || '').width;
             if (w > maxMatchupW) maxMatchupW = w;
         });
-        maxMatchupW += 80; // expand icon (18) + cell padding (18) + sort icon (16) + font weight buffer (28)
+        maxMatchupW += 95; // expand icon (18) + cell padding (18) + sort icon (16) + font weight buffer (43)
 
         // Measure longest abbreviated spread
         let maxSpreadW = 0;
