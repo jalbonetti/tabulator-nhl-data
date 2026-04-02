@@ -218,13 +218,39 @@ export class NHLMatchupsTable extends BaseTable {
     debounce(func, wait) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => func.apply(this, a), wait); }; }
 
     // =========================================================================
-    // DATA FETCHING
+    // DATA FETCHING — FIXED: Now paginates to retrieve ALL records
     // =========================================================================
     async fetchFromEndpoint(endpoint) {
-        const url = `${API_CONFIG.baseURL}${endpoint}`;
-        try { const r = await fetch(url, { method:"GET", headers:API_CONFIG.headers }); if(!r.ok)throw new Error(`HTTP ${r.status}`); return await r.json(); }
-        catch(e) { console.error(`Error fetching ${endpoint}:`,e); return null; }
+        const baseUrl = `${API_CONFIG.baseURL}${endpoint}`;
+        const pageSize = API_CONFIG.fetchConfig.pageSize || 1000;
+        let allRecords = [];
+        let offset = 0;
+        let hasMore = true;
+
+        while (hasMore) {
+            try {
+                const separator = baseUrl.includes('?') ? '&' : '?';
+                const url = `${baseUrl}${separator}select=*&offset=${offset}&limit=${pageSize}`;
+                const r = await fetch(url, { method: "GET", headers: API_CONFIG.headers });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                if (data && data.length > 0) {
+                    allRecords = allRecords.concat(data);
+                    offset += pageSize;
+                    if (data.length < pageSize) hasMore = false;
+                } else {
+                    hasMore = false;
+                }
+            } catch (e) {
+                console.error(`Error fetching ${endpoint} (offset ${offset}):`, e);
+                hasMore = false;
+            }
+        }
+
+        console.log(`Fetched ${allRecords.length} total records from ${endpoint}`);
+        return allRecords.length > 0 ? allRecords : null;
     }
+
     async prefetchSubtableData(mainData) {
         try {
             const [gd,sd] = await Promise.all([this.fetchFromEndpoint(this.ENDPOINTS.GOALIE), this.fetchFromEndpoint(this.ENDPOINTS.SKATER)]);
